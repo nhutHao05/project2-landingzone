@@ -55,4 +55,16 @@ variable "db_username" {
   default = "admin"
 }
 
+variable "monitor_account_id" {
+  type        = string
+  description = "AWS Account ID của tài khoản Monitor để đẩy logs"
+  default     = ""
+}
+
+variable "devops_account_id" {
+  type        = string
+  description = "AWS Account ID của tài khoản DevOps để assume role"
+  default     = ""
+}
+
 

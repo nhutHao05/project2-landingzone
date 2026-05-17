@@ -1,0 +1,14 @@
+# Liên kết và triển khai tài nguyên tài khoản Monitor bằng Provider động
+module "monitor" {
+  source = "../monitor-account"
+
+  # Bơm Provider đã Assume Role sang Monitor Account ở runtime
+  providers = {
+    aws = aws.monitor
+  }
+
+  master_account_id  = data.aws_caller_identity.current.account_id
+  devops_account_id  = aws_organizations_account.devops.id
+  monitor_account_id = aws_organizations_account.monitor.id
+  project_name       = var.project_name
+}

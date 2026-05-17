@@ -1,0 +1,20 @@
+# Thiết lập Organization-wide CloudTrail từ tài khoản Master
+resource "aws_cloudtrail" "org_trail" {
+  name                          = "company-organization-trail"
+  s3_bucket_name                = "company-soar-centralized-logs-${aws_organizations_account.monitor.id}"
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  is_organization_trail         = true # Ghi log cho TẤT CẢ các tài khoản con thuộc Org
+  enable_log_file_validation    = true
+
+  # LƯU Ý BẢO MẬT: Bắt buộc S3 Bucket & Bucket Policy ở tài khoản Monitor phải được khởi tạo thành công trước
+  # để tránh lỗi InsufficientS3BucketPolicyException
+  depends_on = [
+    module.monitor
+  ]
+
+  tags = {
+    Name        = "Organization-Wide-Trail"
+    Environment = "Security-Central"
+  }
+}

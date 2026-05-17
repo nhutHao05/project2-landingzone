@@ -7,6 +7,12 @@ resource "aws_lb" "alb" {
 
 	enable_deletion_protection = false
 
+	access_logs {
+		bucket  = "company-soar-centralized-logs-${var.monitor_account_id}"
+		prefix  = "alb-logs"
+		enabled = true
+	}
+
 	tags = {
 		Name = "${local.name_prefix}-alb"
 	}

@@ -1,0 +1,27 @@
+# ==========================================
+# 🛠️ PHASE 2 PROVIDERS — CHỈ DÙNG SAU KHI CÓ ACCOUNT IDs TỪ PHASE 1
+# ==========================================
+# Sau khi chạy Phase 1 xong, điền devops_account_id và monitor_account_id vào
+# terraform.tfvars rồi chạy terraform apply lần 2
+
+provider "aws" {
+  alias   = "monitor"
+  region  = "ap-southeast-1"
+  profile = var.aws_profile
+
+  assume_role {
+    role_arn     = "arn:aws:iam::${var.monitor_account_id}:role/OrganizationAccountAccessRole"
+    session_name = "TerraformMonitorDeployment"
+  }
+}
+
+provider "aws" {
+  alias   = "devops"
+  region  = "ap-southeast-1"
+  profile = var.aws_profile
+
+  assume_role {
+    role_arn     = "arn:aws:iam::${var.devops_account_id}:role/OrganizationAccountAccessRole"
+    session_name = "TerraformDevOpsDeployment"
+  }
+}

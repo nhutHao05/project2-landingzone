@@ -1,0 +1,19 @@
+# Liên kết và triển khai tài nguyên tài khoản DevOps (VPC, Web App, DB) bằng Provider động
+module "devops" {
+  source = "../devops-account"
+
+  # Bơm Provider đã Assume Role sang DevOps Account ở runtime
+  providers = {
+    aws = aws.devops
+  }
+
+  project            = var.project_name
+  env                = "dev"
+  monitor_account_id = aws_organizations_account.monitor.id
+  devops_account_id  = aws_organizations_account.devops.id
+
+  # Bắt buộc S3 Bucket ở tài khoản Monitor phải có trước khi bật VPC Flow Logs / ALB Logs
+  depends_on = [
+    module.monitor
+  ]
+}
