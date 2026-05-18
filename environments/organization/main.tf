@@ -48,19 +48,31 @@ resource "aws_organizations_organization" "org" {
 resource "aws_organizations_account" "devops" {
   name              = "${var.project_name}-DevOps-Account"
   email             = local.devops_email
+  parent_id         = aws_organizations_organizational_unit.workloads.id
   role_name         = "OrganizationAccountAccessRole"
   close_on_deletion = true
 
-  depends_on = [aws_organizations_organization.org]
+  depends_on = [aws_organizations_organizational_unit.workloads]
 }
 
 resource "aws_organizations_account" "monitor" {
   name              = "${var.project_name}-Monitor-Account"
   email             = local.monitor_email
+  parent_id         = aws_organizations_organizational_unit.security.id
   role_name         = "OrganizationAccountAccessRole"
   close_on_deletion = true
 
-  depends_on = [aws_organizations_organization.org]
+  depends_on = [aws_organizations_organizational_unit.security]
+}
+
+resource "aws_organizations_organizational_unit" "workloads" {
+  name      = "Workloads"
+  parent_id = aws_organizations_organization.org.roots[0].id
+}
+
+resource "aws_organizations_organizational_unit" "security" {
+  name      = "Security"
+  parent_id = aws_organizations_organization.org.roots[0].id
 }
 
 # ==========================================

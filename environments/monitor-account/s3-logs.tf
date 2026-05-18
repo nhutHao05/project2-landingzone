@@ -1,12 +1,36 @@
-# 1. Tạo S3 Bucket nhận logs tập trung
-# Thêm đuôi account_id để đảm bảo tên bucket là DUY NHẤT trên toàn thế giới
-resource "aws_s3_bucket" "centralized_logs" {
-  bucket        = "${var.project_name}-centralized-logs-${var.monitor_account_id}"
-  force_destroy = true
+locals {
+  centralized_logs_bucket_name = "${var.project_name}-centralized-logs-${var.monitor_account_id}"
+  org_trail_arn                = "arn:aws:cloudtrail:${var.aws_region}:${var.master_account_id}:trail/${var.org_trail_name}"
 }
 
-# 2. Ngăn chặn triệt để mọi quyền truy cập Public vào Log Bucket
-resource "aws_s3_bucket_public_access_block" "block_public" {
+resource "aws_s3_bucket" "centralized_logs" {
+  bucket        = local.centralized_logs_bucket_name
+  force_destroy = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
 
   block_public_acls       = true
@@ -15,14 +39,12 @@ resource "aws_s3_bucket_public_access_block" "block_public" {
   restrict_public_buckets = true
 }
 
-# 3. Gắn S3 Bucket Policy cấp quyền ghi chéo tài khoản cho CloudTrail và VPC Flow logs
-resource "aws_s3_bucket_policy" "log_bucket_policy" {
+resource "aws_s3_bucket_policy" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Quyền A: Cho phép dịch vụ CloudTrail kiểm tra thuộc tính ACL của Bucket
       {
         Sid    = "AllowCloudTrailGetAcl"
         Effect = "Allow"
@@ -30,39 +52,69 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}"
+        Resource = aws_s3_bucket.centralized_logs.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceArn" = local.org_trail_arn
+          }
+        }
       },
-      # Quyền B: Cho phép CloudTrail đẩy Logs từ toàn bộ các tài khoản của Org vào thư mục AWSLogs/
       {
-        Sid    = "AllowCloudTrailWrite"
+        Sid    = "AllowOrganizationCloudTrailWrite"
         Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.organization_id}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "aws:SourceArn" = local.org_trail_arn
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
           }
         }
       },
-      # Quyền C: Cho phép dịch vụ Log Delivery của AWS (tài khoản DevOps) được phép đẩy VPC Flow logs và ALB Access logs
       {
-        Sid    = "AllowDevOpsLogs"
+        Sid    = "AllowVpcFlowLogsAclCheck"
         Effect = "Allow"
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = ["s3:PutObject", "s3:GetBucketAcl"]
-        Resource = [
-          "${aws_s3_bucket.centralized_logs.arn}",
-          "${aws_s3_bucket.centralized_logs.arn}/vpc-flowlogs/*",
-          "${aws_s3_bucket.centralized_logs.arn}/alb-logs/*"
-        ]
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = "${var.devops_account_id}"
+            "aws:SourceAccount" = var.devops_account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowVpcFlowLogsWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/vpc-flowlogs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.devops_account_id
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AllowAlbAccessLogsWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/alb-logs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.devops_account_id
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
           }
         }
       }
@@ -70,7 +122,6 @@ resource "aws_s3_bucket_policy" "log_bucket_policy" {
   })
 }
 
-# Output tên Bucket để cấu hình ở các bước sau dễ dàng
 output "centralized_logs_bucket_name" {
   value       = aws_s3_bucket.centralized_logs.id
   description = "Ten cua Centralized S3 Log Bucket"
