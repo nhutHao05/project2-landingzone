@@ -75,6 +75,21 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         }
       },
       {
+        Sid    = "AllowCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.master_account_id}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceArn" = local.org_trail_arn
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
         Sid    = "AllowVpcFlowLogsAclCheck"
         Effect = "Allow"
         Principal = {
