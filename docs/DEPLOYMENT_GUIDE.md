@@ -403,7 +403,7 @@ mysql -h $DB_ENDPOINT -P 3306 -u admin -p
 cd ../..
 
 # Import database cho Web QLSV
-mysql -h $DB_ENDPOINT -P 3306 -u admin -p < Web-Project-1/database/complete_setup.sql
+mysql -h $DB_ENDPOINT -P 3306 -u admin -p < web-app/database/schema.sql
 
 # Expected output:
 # (Không có lỗi, import thành công)
@@ -1001,7 +1001,7 @@ cat /home/ubuntu/bedrock-log-analyzer/.env
 ### Database Initialization
 - [ ] Lấy RDS endpoint từ Terraform output
 - [ ] Test connection: `mysql -h $DB_ENDPOINT -u admin -p`
-- [ ] Import schema: `mysql -h $DB_ENDPOINT -u admin -p < Web-Project-1/database/complete_setup.sql`
+- [ ] Import schema: `mysql -h $DB_ENDPOINT -u admin -p < web-app/database/schema.sql`
 - [ ] Verify: `SHOW DATABASES;` thấy `qlsv_system`
 - [ ] Verify: `USE qlsv_system; SHOW TABLES;` thấy 6 tables
 - [ ] Verify: `SELECT COUNT(*) FROM users;` thấy 14 users
@@ -1127,7 +1127,7 @@ terraform destroy
 mysql -h $DB_ENDPOINT -P 3306 -u admin -p
 
 # Import schema
-mysql -h $DB_ENDPOINT -P 3306 -u admin -p < Web-Project-1/database/complete_setup.sql
+mysql -h $DB_ENDPOINT -P 3306 -u admin -p < web-app/database/schema.sql
 
 # Verify
 mysql -h $DB_ENDPOINT -P 3306 -u admin -p -e "USE qlsv_system; SHOW TABLES;"

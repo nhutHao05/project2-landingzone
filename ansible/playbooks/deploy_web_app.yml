@@ -1,12 +1,13 @@
 ---
-- name: Deploy Student Management Web App
+- name: Deploy OpsDesk Web App
   hosts: role_web
   become: yes
   vars:
-    app_name: student-management-app
+    app_name: opsdesk-web
     host_port: 8080
     container_port: 80
     log_dir: /var/log/app
+    ssm_prefix: /webapp/dev/db
 
   tasks:
     - name: Create application log directory
@@ -27,7 +28,7 @@
 
     - name: Copy PHP source code to remote host
       copy:
-        src: "../../Web-Project-1/"
+        src: "../../web-app/"
         dest: "/home/ec2-user/{{ app_name }}/"
         owner: ec2-user
         group: ec2-user
@@ -41,6 +42,12 @@
         state: present
       async: 900
       poll: 10
+
+    - name: Remove legacy web container if it exists
+      community.docker.docker_container:
+        name: student-management-app
+        state: absent
+      ignore_errors: yes
 
     - name: Run PHP Web App container with logging
       community.docker.docker_container:
@@ -58,14 +65,13 @@
           max-size: "10m"
           max-file: "3"
         env:
-          PHP_ERROR_LOG: "/var/log/app/php-error.log"
-          APP_LOG_FILE: "/var/log/app/application.log"
-          # Lệnh lookup tìm vào SSM lấy password
-          DB_HOST: "{{ lookup('amazon.aws.ssm_parameter', '/qlsv/dev/db/host') }}"
-          DB_USER: "{{ lookup('amazon.aws.ssm_parameter', '/qlsv/dev/db/user') }}"
-          DB_PASS: "{{ lookup('amazon.aws.ssm_parameter', '/qlsv/dev/db/password') }}"
-          DB_NAME: "{{ lookup('amazon.aws.ssm_parameter', '/qlsv/dev/db/name') }}"
-
+          APP_NAME: OpsDesk
+          PHP_ERROR_LOG: /var/log/app/php-error.log
+          APP_LOG_FILE: /var/log/app/application.log
+          DB_HOST: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/host') }}"
+          DB_USER: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/user') }}"
+          DB_PASS: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/password') }}"
+          DB_NAME: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/name') }}"
 
     - name: Configure PHP error logging in container
       shell: |

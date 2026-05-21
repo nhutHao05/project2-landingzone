@@ -73,7 +73,7 @@ else
     echo "✅ Bootstrap already exists"
 fi
 
-cd ../environments/dev/
+cd ../environments/devops-account/
 
 # ============================================================
 # Step 2: Deploy Infrastructure
@@ -177,21 +177,18 @@ echo "🎉 Deployment Complete!"
 echo "======================="
 echo ""
 
-ALB_DNS=$(cd ../environments/dev && terraform output -raw alb_dns_name)
+ALB_DNS=$(cd ../environments/devops-account && terraform output -raw alb_dns_name)
 
 echo "🌐 Access URLs:"
-echo "  Web QLSV: http://$ALB_DNS/qlsv"
+echo "  OpsDesk: http://$ALB_DNS/"
 echo "  AI Log Analyzer: Use ./access_app.sh for SSM port forwarding"
 echo ""
 
 echo "🔐 Default Accounts:"
-echo "  Admin: admin / 123@"
-echo "  Lecturer: gv01 / 123@"
-echo "  Student: sv01 / 123@"
 echo ""
 
 echo "📋 Next Steps:"
-echo "  1. Test web app: curl -I http://$ALB_DNS/qlsv"
+echo "  1. Test web app: curl -I http://$ALB_DNS/"
 echo "  2. Access log analyzer: ./access_app.sh"
 echo "  3. Check logs: ./check_logs.sh"
 echo "  4. Configure Telegram bot in AI_Log_Analysis-Project-1/bedrock-log-analyzer-ui/.env"

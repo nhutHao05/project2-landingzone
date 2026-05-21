@@ -173,7 +173,7 @@ echo "✅ Connection successful!"
 # Deploy schema
 echo ""
 echo "📦 Deploying database schema..."
-mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" < ../../Web-Project-1/database/complete_setup.sql
+mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" < ../../web-app/database/schema.sql
 
 echo ""
 echo "✅ Database deployment complete!"

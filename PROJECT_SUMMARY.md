@@ -317,7 +317,7 @@ mysql -h <db-endpoint> -u admin -p
 - `PROJECT_SUMMARY.md` - Tổng quan project (file này)
 
 ### Application Docs
-- `Web-Project-1/README.md` - QLSV documentation
+- `web-app/README.md` - OpsDesk web app documentation
 - `AI_Log_Analysis-Project-1/bedrock-log-analyzer-ui/README.md` - AI Analyzer docs
 
 ### Infrastructure Docs

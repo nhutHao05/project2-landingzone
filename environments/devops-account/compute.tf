@@ -27,7 +27,7 @@ resource "aws_launch_template" "web" {
   vpc_security_group_ids = [aws_security_group.web.id, aws_security_group.ssm_endpoints.id] # Gán thêm SG SSM
   tag_specifications {
     resource_type = "instance"
-    tags = { Name = "${local.name_prefix}-layer-1-web" }
+    tags          = { Name = "${local.name_prefix}-layer-1-web" }
   }
 }
 
@@ -42,7 +42,7 @@ resource "aws_autoscaling_group" "web" {
   desired_capacity    = 1
   min_size            = 1
   max_size            = 1
-  target_group_arns   = [aws_lb_target_group.qlsv.arn]
+  target_group_arns   = [aws_lb_target_group.web.arn]
   health_check_type   = "EC2"
 
   launch_template {
@@ -71,7 +71,7 @@ resource "aws_launch_template" "app" {
   vpc_security_group_ids = [aws_security_group.app.id, aws_security_group.ssm_endpoints.id] # Gán thêm SG SSM
   tag_specifications {
     resource_type = "instance"
-    tags = { Name = "${local.name_prefix}-layer-2-app" }
+    tags          = { Name = "${local.name_prefix}-layer-2-app" }
   }
 }
 

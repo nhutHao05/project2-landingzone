@@ -154,7 +154,7 @@ terraform-for-project1/
 │   ├── roles/                    # Ansible roles
 │   └── templates/                # Jinja2 templates
 │
-├── 📂 Web-Project-1/             # QLSV - Student Management System
+├── 📂 web-app/                   # OpsDesk web application
 │   ├── index.php                 # Entry point
 │   ├── admin/                    # Admin panel
 │   ├── lecturer/                 # Lecturer module
@@ -473,7 +473,7 @@ sudo tail -f /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
 | [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) | Tổng quan project & status |
 | [review_report.md](review_report.md) | Báo cáo review kiến trúc DevSecOps |
 | [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) | Deployment guide bổ sung |
-| [Web-Project-1/README.md](Web-Project-1/README.md) | Tài liệu ứng dụng QLSV |
+| [web-app/README.md](web-app/README.md) | Tài liệu ứng dụng OpsDesk |
 | [AI_Log_Analysis-Project-1/bedrock-log-analyzer-ui/README.md](AI_Log_Analysis-Project-1/bedrock-log-analyzer-ui/README.md) | Tài liệu AI Log Analyzer |
 
 ---

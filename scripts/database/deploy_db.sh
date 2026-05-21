@@ -1,53 +1,37 @@
 #!/bin/bash
 set -e
 
-echo "🗄️ Database Deployment Script"
-echo "================================"
+echo "OpsDesk database deployment"
+echo "==========================="
 
-# Load DB credentials from Terraform outputs
-DB_HOST=$(cd ../../environments/dev && terraform output -raw db_endpoint)
-DB_USER="admin"
-DB_PASS=$(cd ../../environments/dev && terraform output -raw db_password)
-DB_NAME="qlsv_system"
+TERRAFORM_DIR="${TERRAFORM_DIR:-../../environments/devops-account}"
+SCHEMA_FILE="${SCHEMA_FILE:-../../web-app/database/schema.sql}"
+DB_USER="${DB_USER:-admin}"
+DB_NAME="${DB_NAME:-opsdesk}"
 
-echo "📍 DB Host: $DB_HOST"
-echo "👤 DB User: $DB_USER"
-echo "🗄️ DB Name: $DB_NAME"
+DB_HOST=$(cd "$TERRAFORM_DIR" && terraform output -raw db_endpoint)
+DB_PASS=$(cd "$TERRAFORM_DIR" && terraform output -raw db_password)
 
-# Kiểm tra kết nối
+echo "DB host: $DB_HOST"
+echo "DB user: $DB_USER"
+echo "DB name: $DB_NAME"
+
 echo ""
-echo "🔍 Testing database connection..."
+echo "Testing database connection..."
 mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" -e "SELECT VERSION();" || {
-    echo "❌ Cannot connect to database"
+    echo "Cannot connect to database"
     exit 1
 }
 
-echo "✅ Connection successful!"
-
-# Deploy schema
-echo ""
-echo "📦 Deploying database schema..."
-mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" < ../../Web-Project-1/database/complete_setup.sql
+echo "Connection successful"
 
 echo ""
-echo "✅ Database deployment complete!"
+echo "Deploying schema from $SCHEMA_FILE"
+mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" < "$SCHEMA_FILE"
+
 echo ""
-echo "📊 Database Summary:"
+echo "Database deployment complete"
 mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" -e "
-USE qlsv_system;
-SELECT 'Users' as Table_Name, COUNT(*) as Count FROM users
-UNION ALL
-SELECT 'Students', COUNT(*) FROM students
-UNION ALL
-SELECT 'Classes', COUNT(*) FROM classes
-UNION ALL
-SELECT 'Enrollments', COUNT(*) FROM enrollments
-UNION ALL
-SELECT 'Grades', COUNT(*) FROM grades;
+USE ${DB_NAME};
+SELECT status, COUNT(*) AS incidents FROM incidents GROUP BY status ORDER BY status;
 "
-
-echo ""
-echo "🔐 Default Accounts:"
-echo "  Admin: admin / 123@"
-echo "  Lecturers: gv01, gv02, gv03 / 123@"
-echo "  Students: sv01-sv10 / 123@"

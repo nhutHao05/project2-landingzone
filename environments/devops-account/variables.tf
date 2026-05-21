@@ -55,6 +55,18 @@ variable "db_username" {
   default = "admin"
 }
 
+variable "app_db_name" {
+  type        = string
+  description = "Database name used by the web application in the layer 3 RDS instance"
+  default     = "opsdesk"
+}
+
+variable "app_ssm_prefix" {
+  type        = string
+  description = "SSM prefix for web application database connection settings"
+  default     = "/webapp"
+}
+
 variable "monitor_account_id" {
   type        = string
   description = "AWS Account ID của tài khoản Monitor để đẩy logs"
