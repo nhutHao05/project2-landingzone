@@ -9,6 +9,21 @@ resource "aws_s3_bucket" "centralized_logs" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes = [
+      tags,
+      tags_all,
+      grant,
+      region,
+      request_payer,
+      cors_rule,
+      lifecycle_rule,
+      logging,
+      object_lock_configuration,
+      replication_configuration,
+      server_side_encryption_configuration,
+      versioning,
+      website,
+    ]
   }
 }
 

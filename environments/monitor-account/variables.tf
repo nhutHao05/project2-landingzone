@@ -41,3 +41,25 @@ variable "org_trail_name" {
   description = "Ten Organization CloudTrail o Management Account"
   default     = "p2-soar-organization-trail"
 }
+
+# ==========================================
+# Phase 2 Variables — Elastic Agent EC2
+# ==========================================
+variable "enable_elastic_agent_ec2" {
+  type        = bool
+  description = "Bat/tat viec tao EC2 cho Elastic Agent. Bat sau khi lay Fleet URL va Enrollment Token tu Kibana."
+  default     = false
+}
+
+variable "elastic_fleet_url" {
+  type        = string
+  description = "Fleet Server URL lay tu Kibana → Fleet → Settings. Vi du: https://elastic.hungcx.cloud:8220"
+  default     = ""
+}
+
+variable "elastic_enrollment_token" {
+  type        = string
+  description = "Enrollment Token lay tu Kibana → Fleet → Agents → Add agent → chon policy p2-soar-aws-policy"
+  sensitive   = true
+  default     = ""
+}
