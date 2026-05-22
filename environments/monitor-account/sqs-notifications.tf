@@ -54,8 +54,8 @@ resource "aws_s3_bucket_notification" "cloudtrail_to_sqs" {
   queue {
     queue_arn     = aws_sqs_queue.cloudtrail_notifications.arn
     events        = ["s3:ObjectCreated:*"]
-    filter_prefix = "AWSLogs/"          # Chỉ theo dõi thư mục CloudTrail logs
-    filter_suffix = ".json.gz"          # Chỉ theo dõi file log (không trigger với folder)
+    filter_prefix = "AWSLogs/" # Chỉ theo dõi thư mục CloudTrail logs
+    filter_suffix = ".json.gz" # Chỉ theo dõi file log (không trigger với folder)
   }
 
   depends_on = [aws_sqs_queue_policy.cloudtrail_notifications]

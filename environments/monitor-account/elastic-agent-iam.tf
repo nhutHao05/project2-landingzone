@@ -71,5 +71,5 @@ output "elastic_agent_access_key_id" {
 output "elastic_agent_secret_access_key" {
   value       = aws_iam_access_key.elastic_agent.secret
   description = "IAM Secret Access Key cho Elastic Agent — BAO MAT, khong commit len git"
-  sensitive   = true  # Giấu trong terminal, xem bằng: terraform output -raw elastic_agent_secret_access_key
+  sensitive   = true # Giấu trong terminal, xem bằng: terraform output -raw elastic_agent_secret_access_key
 }

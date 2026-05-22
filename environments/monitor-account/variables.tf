@@ -63,3 +63,30 @@ variable "elastic_enrollment_token" {
   sensitive   = true
   default     = ""
 }
+
+# ==========================================
+# Phase 3 Variables — AI Engine
+# ==========================================
+variable "elasticsearch_url" {
+  type        = string
+  description = "URL cua Elasticsearch cluster"
+  default     = "https://elastic.hungcx.cloud:9200"
+}
+
+variable "elasticsearch_username" {
+  type        = string
+  description = "Username de Lambda truy van Elasticsearch (VD: haonh)"
+  default     = "haonh"
+}
+
+variable "elasticsearch_password" {
+  type        = string
+  description = "Password truy van Elasticsearch"
+  sensitive   = true
+}
+
+variable "bedrock_model_id" {
+  type        = string
+  description = "Model ID dung tren Amazon Bedrock"
+  default     = "anthropic.claude-haiku-4-5"
+}
