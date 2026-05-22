@@ -468,8 +468,8 @@ Audit trail:
 |-------|----------|------------|
 | **Phase 1** | Landing Zone: Organizations + 3 accounts + CloudTrail centralized + S3 + SQS + IAM | ✅ Xong |
 | **Phase 2** | Elastic Agent: EC2 → enroll Fleet anh Hưng → cấu hình AWS Integration → verify logs vào Elasticsearch | ✅ Xong |
-| **Phase 3** | AI Engine: Lambda + Bedrock. Test với real alerts từ Elastic | 🔄 Đang làm |
-| **Phase 4** | Remediation: Lambda actions (block IP, revoke creds, isolate EC2) | 🔜 Sắp tới |
+| **Phase 3** | AI Engine: Lambda + Bedrock. Test với real alerts từ Elastic | ✅ Xong |
+| **Phase 4** | Remediation: Lambda actions (block IP, revoke creds, isolate EC2) | 🔄 Đang làm |
 | **Phase 5** | Web Portal: SSO login + Dashboard + Approve/Reject UI | 🔜 Sắp tới |
 | **Phase 6** | Polish: Audit logs, rollback, thresholds, testing attack scenarios | 🔜 Sắp tới |
 
