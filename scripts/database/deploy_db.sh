@@ -4,8 +4,9 @@ set -e
 echo "OpsDesk database deployment (via SSM Tunnel)"
 echo "==========================================="
 
-TERRAFORM_DIR="${TERRAFORM_DIR:-../../environments/devops-account}"
-SCHEMA_FILE="${SCHEMA_FILE:-../../web-app/database/schema.sql}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+TERRAFORM_DIR="${TERRAFORM_DIR:-$SCRIPT_DIR/../../environments/devops-account}"
+SCHEMA_FILE="${SCHEMA_FILE:-$SCRIPT_DIR/../../web-app/database/schema.sql}"
 DB_USER="${DB_USER:-admin}"
 DB_NAME="${DB_NAME:-opsdesk}"
 
