@@ -10,4 +10,10 @@ terraform {
     }
   }
   required_version = ">= 1.5.0"
+
+  backend "s3" {
+    bucket = "p1-bootstrap-apse1-tfstate"
+    key    = "devops-account/terraform.tfstate"
+    region = "ap-southeast-1"
+  }
 }
