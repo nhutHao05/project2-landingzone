@@ -48,10 +48,15 @@ for log_group in "${LOG_GROUPS[@]}"; do
             --query 'events[0].timestamp' \
             --output text 2>/dev/null || echo "0")
         
-        if [ "$latest_event" != "0" ] && [ "$latest_event" != "None" ]; then
-            # Convert timestamp to readable format
-            latest_time=$(date -d "@$((latest_event / 1000))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "N/A")
-            echo "✅ ACTIVE ($stream_count streams, latest: $latest_time)"
+        if [ "$latest_event" != "0" ] && [[ ! "$latest_event" == *"None"* ]]; then
+            # Extract only the first sequence of digits to avoid newline/None issues
+            clean_event=$(echo "$latest_event" | grep -o -E '[0-9]+' | head -n 1)
+            if [ -n "$clean_event" ]; then
+                latest_time=$(date -d "@$((clean_event / 1000))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "N/A")
+                echo "✅ ACTIVE ($stream_count streams, latest: $latest_time)"
+            else
+                echo "⚠️  EXISTS but NO LOGS YET ($stream_count streams)"
+            fi
         else
             echo "⚠️  EXISTS but NO LOGS YET ($stream_count streams)"
         fi

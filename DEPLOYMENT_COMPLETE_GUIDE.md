@@ -1,150 +1,113 @@
-# 🚀 HƯỚNG DẪN DEPLOY HOÀN CHỈNH - SOAR LANDING ZONE
+# 🚀 HƯỚNG DẪN DEPLOY TỰ ĐỘNG - SOAR LANDING ZONE
+
+Tài liệu này hướng dẫn cách sử dụng kịch bản tự động (`deploy_all.sh`) để triển khai toàn bộ hạ tầng và ứng dụng lên AWS chỉ với một lệnh duy nhất.
 
 ## 📋 MỤC LỤC
-1. [Tổng quan kiến trúc](#tổng-quan-kiến-trúc)
-2. [Chuẩn bị môi trường](#chuẩn-bị-môi-trường)
-3. [Deploy Infrastructure (Terraform)](#deploy-infrastructure-terraform)
-4. [Deploy Database](#deploy-database)
-5. [Deploy Applications (Ansible)](#deploy-applications-ansible)
-6. [Cấu hình Elastic SIEM & AI Engine](#cấu-hình-elastic-siem--ai-engine)
-7. [Kiểm tra Log Groups](#kiểm-tra-log-groups)
-8. [Truy cập ứng dụng](#truy-cập-ứng-dụng)
+1. [Tổng quan hệ thống](#1-tổng-quan-hệ-thống)
+2. [Chuẩn bị môi trường](#2-chuẩn-bị-môi-trường)
+3. [Chạy kịch bản tự động (deploy_all.sh)](#3-chạy-kịch-bản-tự-động)
+4. [Cấu hình Elastic SIEM & AI Engine](#4-cấu-hình-elastic-siem--ai-engine)
+5. [Truy cập ứng dụng](#5-truy-cập-ứng-dụng)
 
 ---
 
-## 🏗️ TỔNG QUAN KIẾN TRÚC
+## 1. TỔNG QUAN HỆ THỐNG
 
-### **Layer 1 - Web Tier (Public Access via ALB)**
-- **Ứng dụng**: OpsDesk Web App (PHP)
-- **Truy cập**: `http://<ALB-DNS-NAME>/`
-- **Port**: 8080 (internal), 80 (ALB)
-- **Log Groups**:
-  - `/aws/ec2/web-tier/system` - System logs
-  - `/aws/ec2/web-tier/httpd` - Apache logs
-  - `/aws/ec2/web-tier/application` - PHP application logs
+Sau khi chạy xong kịch bản tự động, bạn sẽ có các thành phần sau:
 
-### **Layer 2 - App Tier (Private - SSM Access Only)**
-- **Ứng dụng**: SOAR Web Portal (Nginx - Thay thế Streamlit cũ)
-- **Truy cập**: SSM Port Forwarding → `http://localhost:8501`
-- **Port**: 8501
-- **Log Groups**:
-  - `/aws/ec2/app-tier/system` - System logs
-  - `/aws/ec2/app-tier/streamlit` - (Giữ nguyên log group cũ cho Web Portal)
+### **Layer 1 - OpsDesk Web App** (Public Access)
+- **Truy cập**: Qua Load Balancer (ALB).
+- **Tính năng**: Ứng dụng quản lý nhân sự/vận hành (PHP) giao tiếp với RDS Database kín.
 
-### **Layer 3 - Security & Remediation (DevOps Account)**
-- **Ứng dụng**: Remediation Lambda & API Gateway
-- **Tính năng**: Thực thi các lệnh cô lập EC2, khóa IAM User, chặn IP.
+### **Layer 2 - SOAR Web Portal** (Private Access)
+- **Truy cập**: Thông qua AWS SSM Port Forwarding.
+- **Tính năng**: Trạm điều khiển AI trung tâm, giám sát sự cố (Incidents) và ra lệnh khắc phục tự động.
+
+### **Layer 3 - Security Automation** (DevOps Account)
+- **Tính năng**: Remediation Lambda, API Gateway, CloudTrail, CloudWatch Logs. Khi phát hiện Hacker, AI sẽ tự động cô lập máy chủ hoặc khóa IAM Account.
 
 ---
 
-## 🔧 CHUẨN BỊ MÔI TRƯỜNG
+## 2. CHUẨN BỊ MÔI TRƯỜNG
 
+Trước khi chạy script tự động, bạn cần đảm bảo các thông tin sau:
+
+1. **Kiểm tra công cụ**: Máy ảo WSL đã cài đặt đủ `aws-cli`, `terraform`, và `ansible`.
+2. **Đăng nhập AWS**: Chạy `aws configure` để lưu credentials.
+3. **Cấu hình file biến Terraform**:
+   Mở thư mục `environments/devops-account/` và tạo/chỉnh sửa file `terraform.tfvars`:
+   ```bash
+   cd environments/devops-account/
+   nano terraform.tfvars
+   ```
+   *Dán nội dung sau (lưu ý tên project phải khớp với state cũ nếu có trên S3):*
+   ```hcl
+   project = "p2-soar"
+   env     = "dev"
+   ```
+
+---
+
+## 3. CHẠY KỊCH BẢN TỰ ĐỘNG
+
+Kịch bản `deploy_all.sh` sẽ thực hiện thay bạn 5 bước lớn:
+- **Step 1**: Tạo S3 Backend (nếu chưa có).
+- **Step 2**: Terraform Deploy (VPC, EC2, ALB, RDS, Lambda).
+- **Step 3**: Fix các lỗi liên quan tới CloudWatch Log Groups.
+- **Step 4**: Kết nối xuyên hầm (SSM) vào RDS riêng tư và đổ Database Schema.
+- **Step 5**: Ansible cài đặt Docker và đẩy source code OpsDesk & Web Portal lên Server.
+
+**Thực thi lệnh:**
 ```bash
-# Cài đặt công cụ
-terraform --version  # >= 1.0
-ansible --version    # >= 2.9
-aws --version        # >= 2.0
-
-# Cấu hình AWS profile
-aws configure --profile default
-aws sts get-caller-identity
+cd scripts/
+chmod +x deploy_all.sh
+./deploy_all.sh
 ```
 
----
-
-## 🏗️ DEPLOY INFRASTRUCTURE (TERRAFORM)
-
-Toàn bộ hạ tầng sẽ được tạo tự động bằng Terraform.
-
-### Bước 1: Bootstrap S3 Backend
-```bash
-cd bootstrap/
-terraform init
-terraform apply -auto-approve
-```
-
-### Bước 2: Deploy Hạ tầng (VPC, EC2, ALB, RDS, Lambda)
-*Thư mục `devops-account` chứa toàn bộ hạ tầng cốt lõi (Môi trường Dev) lẫn các dịch vụ bảo mật (Lambda, API Gateway).*
-```bash
-cd ../environments/devops-account/
-terraform init
-terraform apply -auto-approve
-
-# Lưu lại các outputs quan trọng: alb_dns_name, db_endpoint, db_password
-# (Thành công sẽ in ra cả remediation_api_url và tự sinh file web-portal/config.json)
-```
+**Trong quá trình chạy, script sẽ hỏi bạn vài lần (y/n):**
+- *Apply infrastructure changes? (y/n)*: Bấm **y** để cho phép Terraform thay đổi hạ tầng.
+- *Continue? (y/n)* (Ở phần Fix Log Groups): Bấm **y** để tiếp tục.
+- *Deploy database schema? (y/n)*: Bấm **y** để tạo bảng tự động qua SSM Tunnel.
+- *Deploy applications? (y/n)*: Bấm **y** để Ansible bắn code lên Server.
 
 ---
 
-## 💾 DEPLOY DATABASE
+## 4. CẤU HÌNH ELASTIC SIEM & AI ENGINE (MANUAL)
 
-```bash
-cd ../../scripts/
-chmod +x database/deploy_db.sh
-./database/deploy_db.sh
-```
-*Script này sẽ đọc db_endpoint từ Terraform và tự động tạo 6 bảng, nạp 14 user mặc định.*
-
----
-
-## 🚀 DEPLOY APPLICATIONS (ANSIBLE)
-
-```bash
-cd ../ansible/
-
-# Cập nhật thông số database vào file secrets hoặc parameter store
-# Deploy toàn bộ stack (Bao gồm CloudWatch, Docker, OpsDesk và Web Portal)
-ansible-playbook -i inventory/aws_ec2.yml playbooks/site.yml
-```
-*Thao tác này sẽ dọn dẹp Streamlit AI cũ và đẩy source code mới của Web Portal lên EC2.*
-
----
-
-## 🧠 CẤU HÌNH ELASTIC SIEM & AI ENGINE (MANUAL)
-
-Do AI Engine đã được tích hợp qua Lambda (Phase 3), bạn chỉ cần làm 1 bước cuối cùng trên Kibana:
+Do AI Engine đã được tích hợp qua Lambda (Phase 3), bạn chỉ cần làm 1 bước cuối cùng trên Kibana để tạo "Dây thần kinh cảm giác" cho hệ thống SOAR:
 1. Đăng nhập vào giao diện Kibana.
 2. Vào **Security -> Rules -> Detection rules (SIEM)**.
 3. Tích chọn **Tất cả các rules** đang bật.
 4. Chọn **Bulk actions -> Add rule actions**.
-5. Chọn Action là **Webhook**, Connector chọn `p2-soar-ai-engine-webhook`.
+5. Chọn Action là **Webhook**, Connector chọn cái bạn đã tạo sẵn (ví dụ: `p2-soar-ai-engine-webhook`).
 6. Ở ô **Body**, dán đoạn JSON sau:
-```json
-{
-  "rule_name": "{{{context.rule.name}}}",
-  "rule_description": "{{{context.rule.description}}}",
-  "timestamp": "{{{date}}}",
-  "alerts": {{{context.alerts}}}
-}
-```
+   ```json
+   {
+     "rule_name": "{{{context.rule.name}}}",
+     "rule_description": "{{{context.rule.description}}}",
+     "timestamp": "{{{date}}}",
+     "alerts": {{{context.alerts}}}
+   }
+   ```
 7. Bấm **Save**.
 
 ---
 
-## 🌐 TRUY CẬP ỨNG DỤNG
+## 5. TRUY CẬP ỨNG DỤNG
 
 ### Layer 1 - OpsDesk Web App (Public)
-Mở browser: `http://<ALB-DNS-NAME>/`
-- Admin: `admin` / `123@`
-- Ops Staff: `ops01` / `123@`
+Mở browser: `http://<ALB-DNS-NAME>/` *(Đường link ALB này sẽ được in ra ở màn hình cuối cùng của script deploy).*
+- **Admin**: `admin` / `123@`
+- **Ops Staff**: `ops01` / `123@`
 
 ### Layer 2 - SOAR Web Portal (Private - Trạm điều khiển AI)
+Vì Web Portal nằm trong Private Subnet (chỉ có IP nội bộ), bạn phải dùng SSM Port Forwarding để chui ống vào:
 ```bash
-# Lấy instance ID của app tier
-APP_INSTANCE=$(aws ec2 describe-instances --filters "Name=tag:Role,Values=app" "Name=instance-state-name,Values=running" --query 'Reservations[0].Instances[0].InstanceId' --output text)
-
-# Port forwarding qua SSM
-aws ssm start-session \
-    --target $APP_INSTANCE \
-    --document-name AWS-StartPortForwardingSession \
-    --parameters '{"portNumber":["8501"],"localPortNumber":["8501"]}'
+cd scripts/
+chmod +x access_app.sh
+./access_app.sh
 ```
-Truy cập: `http://localhost:8501`
-
-**Tính năng Web Portal:**
-- Xem danh sách Attack Chains do AI phân tích (từ DynamoDB).
-- Bấm `Approve` để tự động kích hoạt Lambda cô lập mục tiêu ngay lập tức.
-- Hệ thống phòng thủ khép kín 100%.
+Trình duyệt sẽ tự động kết nối qua `http://localhost:8501`.
 
 ---
-**Happy Deploying! 🚀 Hệ thống SOAR đã chính thức hoàn thiện!**
+**🎉 Chúc bạn Deploy thành công rực rỡ! 🚀**
