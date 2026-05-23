@@ -153,8 +153,16 @@ function renderTable() {
         const tr = document.createElement('tr');
 
         const sevClass = inc.severity.toLowerCase() === 'critical' ? 'critical' : 'high';
-        const statusClass = inc.status === 'pending_approval' ? 'pending' : 'resolved';
-        const statusText = inc.status === 'pending_approval' ? 'Pending Approval' : 'Resolved';
+        
+        let statusClass = 'pending';
+        let statusText = 'Pending Approval';
+        if (inc.status === 'resolved') {
+            statusClass = 'resolved';
+            statusText = 'Resolved';
+        } else if (inc.status === 'rejected') {
+            statusClass = 'rejected';
+            statusText = 'Rejected';
+        }
 
         if (inc.status === 'pending_approval') pendingCount++;
 
@@ -167,8 +175,13 @@ function renderTable() {
             <td><span class="badge ${statusClass}">${statusText}</span></td>
             <td>
                 ${inc.status === 'pending_approval'
-                    ? `<button class="btn-primary btn-small approve-trigger" data-id="${escapeHtml(inc.id)}">Approve</button>`
-                    : '<button class="btn-secondary btn-small" disabled>Done</button>'}
+                    ? `<div style="display: flex; gap: 8px;">
+                         <button class="btn-primary btn-small approve-trigger" data-id="${escapeHtml(inc.id)}">Approve</button>
+                         <button class="btn-danger btn-small reject-trigger" data-id="${escapeHtml(inc.id)}">Reject</button>
+                       </div>`
+                    : inc.status === 'rejected'
+                        ? '<button class="btn-secondary btn-small" disabled style="color: var(--danger); opacity: 0.6;">Rejected</button>'
+                        : '<button class="btn-secondary btn-small" disabled>Done</button>'}
             </td>
         `;
         tbody.appendChild(tr);
@@ -188,7 +201,14 @@ function renderTable() {
     document.querySelectorAll('.approve-trigger').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.target.getAttribute('data-id');
-            openModal(id);
+            openModal(id, 'approve');
+        });
+    });
+
+    document.querySelectorAll('.reject-trigger').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.getAttribute('data-id');
+            openModal(id, 'reject');
         });
     });
 }

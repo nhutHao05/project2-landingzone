@@ -110,11 +110,15 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = [
+          "s3:GetBucketAcl",
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.devops_account_id
+            "aws:SourceAccount" = [var.devops_account_id, var.master_account_id]
           }
         }
       },
@@ -128,8 +132,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/vpc-flowlogs/*"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.devops_account_id
-            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "aws:SourceAccount" = [var.devops_account_id, var.master_account_id]
           }
         }
       },
@@ -143,8 +146,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/alb-logs/*"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.devops_account_id
-            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "aws:SourceAccount" = [var.devops_account_id, var.master_account_id]
           }
         }
       }

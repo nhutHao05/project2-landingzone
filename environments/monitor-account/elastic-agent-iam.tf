@@ -53,7 +53,39 @@ resource "aws_iam_user_policy" "elastic_agent" {
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes"
         ]
-        Resource = aws_sqs_queue.cloudtrail_notifications.arn
+        Resource = "arn:aws:sqs:${var.aws_region}:${var.monitor_account_id}:${var.project_name}-*"
+      },
+      {
+        Sid    = "AllowAssumeRole"
+        Effect = "Allow"
+        Action = [
+          "sts:AssumeRole"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowAWSIntegrationRead"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeRegions",
+          "ec2:DescribeInstances",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeTransitGateways",
+          "ec2:DescribeVolumes",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "rds:DescribeDBInstances",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:FilterLogEvents",
+          "logs:GetLogEvents"
+        ]
+        Resource = "*"
       }
     ]
   })

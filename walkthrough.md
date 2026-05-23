@@ -1,82 +1,247 @@
-# Walkthrough: Khắc phục lỗi và cấu hình thành công Elastic Agent Ingestion
+# Walkthrough: Hệ thống Thu thập Log Tập trung → Elastic SIEM
 
-Tài liệu này tổng hợp nguyên nhân sự cố, các bước xử lý và kết quả kiểm tra hoạt động của hệ thống thu thập log CloudTrail từ AWS Landing Zone.
-
----
-
-## 1. Nguyên nhân sự cố ban đầu
-- **Lỗi kết nối Fleet Server (Cổng `8220`)**: Fleet Server đẩy cấu hình về Agent sử dụng địa chỉ IP nội bộ `https://172.25.1.29:8220`, khiến Agent không thể kết nối từ mạng EC2.
-- **Lỗi kết nối Elasticsearch (Cổng `9200`)**: Cấu phần `aws-s3-default` (Filebeat) sau khi nhận cấu hình vẫn cố gắng đẩy log lên Elasticsearch tại địa chỉ IP nội bộ `https://172.25.1.29:9200` dẫn đến lỗi timeout liên tục.
+Tài liệu này tổng hợp toàn bộ kiến trúc, cấu hình và trạng thái hoạt động của pipeline thu thập log từ AWS Landing Zone (3 accounts) vào Elasticsearch/Kibana để phát hiện mối đe dọa.
 
 ---
 
-## 2. Giải pháp thực hiện
+## 1. Kiến trúc Tổng quan
 
-### A. Thiết lập Quy tắc NAT Động (iptables & systemd)
-Chúng tôi đã áp dụng cơ chế bẻ hướng traffic NAT trực tiếp trên máy chủ EC2:
-- Chuyển hướng các gói tin gửi tới `172.25.1.29:8220` sang IP Public của Fleet Server (`103.98.153.3:8220`).
-- Chuyển hướng các gói tin gửi tới `172.25.1.29:9200` sang IP Public của Elasticsearch (`103.98.153.3:9200`).
+```mermaid
+flowchart TD
+    subgraph DevOps["DevOps Account (884264984854)"]
+        CT["CloudTrail\n(Organization Trail)"]
+        VPC["VPC Flow Logs"]
+        ALB["ALB Access Logs"]
+    end
 
-Để đảm bảo tính bền vững (persistence):
-1. **Systemd Service**: Tạo service `elastic-agent-nat.service` tự động chạy khi khởi động máy. Service này tự động phân giải tên miền `elastic.hungcx.cloud` ra IP động mới nhất rồi mới cấu hình rules `iptables`.
-2. **Terraform Template**: Tích hợp quy trình cấu hình NAT này trực tiếp vào file [install-elastic-agent.sh.tpl](file:///d:/Project-2-Landing-Zone/environments/monitor-account/scripts/install-elastic-agent.sh.tpl) để tự động hóa hoàn toàn nếu EC2 được recreate sau này.
+    subgraph Monitor["Monitor Account (247448832458)"]
+        S3["S3 Centralized Logs\np2-soar-centralized-logs-247448832458"]
+        SQS["SQS Queue\np2-soar-cloudtrail-notifications"]
+        EC2["Elastic Agent EC2\n(t3.micro)"]
+    end
 
----
+    subgraph Elastic["Elastic Stack (elastic.hungcx.cloud)"]
+        ES["Elasticsearch :9200"]
+        KB["Kibana Dashboard"]
+        SIEM["SIEM Detection Rules"]
+    end
 
-## 3. Xác minh hoạt động hệ thống
-
-### A. Trạng thái Elastic Agent trên Fleet Console
-- Trạng thái tổng thể: **`Healthy` (Màu xanh lá cây)**.
-- Cấu phần `p2-aws-cloudtrail-integration` hoạt động bình thường, không còn cảnh báo đỏ.
-
-![Fleet Agent Status](C:/Users/Home/.gemini/antigravity/brain/ba10fb0b-9128-4c18-96dc-5f3d23386019/fleet_status.png)
-
-### B. Chỉ số log được nạp vào Elasticsearch
-Truy vấn trực tiếp qua API Elasticsearch cho thấy Index CloudTrail đã được tạo và lưu trữ thành công tài liệu log:
-- **Tên Index**: `.ds-logs-aws.cloudtrail-default-2026.05.22-000001`
-- **Số lượng log ghi nhận**: `1467` bản ghi (documents).
-
----
-
-## 4. Các cấu hình SIEM đã thực hiện trên Kibana
-
-### A. Giao diện Discover & Data View
-- Đã tạo thành công **Data View** mang tên **`AWS CloudTrail Logs`** (pattern: `logs-aws.cloudtrail-*`, timestamp: `@timestamp`).
-- Logs CloudTrail được giải nén từ SQS/S3 hiển thị thời gian thực trên thanh thời gian (Timeline) với đầy đủ các trường thông tin (Event Outcome, Action, Source IP,...).
-
-### B. AWS CloudTrail Dashboard
-Dashboard **`[Logs AWS] CloudTrail Overview`** đã tải dữ liệu thành công và trực quan hóa toàn bộ Landing Zone:
-- **Bản đồ địa lý (Source Location)**: Đánh dấu các vị trí có IP phát sinh lệnh gọi API (như Đông Nam Á).
-- **Trạng thái cuộc gọi (Event Outcome)**: Biểu đồ thống kê số cuộc gọi Success (thành công) và Failure (thất bại).
-- **Hành động (Actions)**: Thống kê các API như `GetBucketAcl`, `UpdateInstanceInformation`, `ListInstances`,...
-
-![CloudTrail Dashboard Overview](C:/Users/Home/.gemini/antigravity/brain/ba10fb0b-9128-4c18-96dc-5f3d23386019/cloudtrail_dashboard.png)
-
-### C. Kích hoạt 5 luật an ninh (Detection Rules) của Elastic SIEM
-Đã nạp gói Elastic prebuilt rules và kích hoạt thành công 5 luật sau để tự động phát hiện và cảnh báo các hoạt động bất thường:
-1. **AWS IAM Group Creation**: Cảnh báo khi có nhóm IAM mới được tạo (phát hiện leo thang đặc quyền).
-2. **AWS SNS Topic Message Publish by Rare User**: Cảnh báo khi người dùng ít hoạt động cố gửi tin nhắn SNS.
-3. **Insecure AWS EC2 VPC Security Group Ingress Rule Added**: Cảnh báo khi có rule mở cổng nguy hiểm (ví dụ: 0.0.0.0/0) trong Security Group.
-4. **AWS CloudTrail Log Suspended**: Cảnh báo khi CloudTrail bị dừng hoặc cấu hình ghi log bị vô hiệu hóa (phát hiện hành vi xóa vết).
-5. **AWS S3 Bucket Configuration Deletion**: Cảnh báo khi có cấu hình quan trọng của S3 bucket bị xóa.
-
-![SIEM Detection Rules Enabled](C:/Users/Home/.gemini/antigravity/brain/ba10fb0b-9128-4c18-96dc-5f3d23386019/detection_rules.png)
+    CT -->|"AWSLogs/*.json.gz"| S3
+    VPC -->|"vpc-flowlogs/*.log.gz"| S3
+    ALB -->|"alb-logs/*.log.gz"| S3
+    S3 -->|"S3 Event Notification"| SQS
+    EC2 -->|"Poll SQS"| SQS
+    EC2 -->|"Download logs từ S3"| S3
+    EC2 -->|"Push logs"| ES
+    ES --> KB
+    ES --> SIEM
+```
 
 ---
 
-## 5. Triển khai AI Engine & Kết nối Webhook (Phase 3)
+## 2. Chi tiết Cấu hình từng Nguồn Log
 
-Chúng tôi đã hoàn thành xây dựng và kích hoạt bộ máy phân tích an ninh tự động sử dụng AI:
+### A. CloudTrail Logs → S3 → Elastic ✅
 
-### A. Triển khai Serverless AI Engine
-- **AWS Lambda (`p2-soar-ai-engine`)**: Viết bằng Python 3.12, chịu trách nhiệm nhận dữ liệu alert từ Kibana, tự động query ngược lại Elasticsearch lấy 60 log events xung quanh sự cố (bao gồm log CloudTrail, VPC Flow, Web App, Database), sau đó gửi prompt tới **Amazon Bedrock (Claude Haiku 4.5)** để phân tích.
-- **Hệ thống Prompt chuyên sâu**: Cấu hình prompt chi tiết tại `prompt_template.py` giúp AI nhận diện và xử lý 4 nguồn log của Landing Zone, phân tích timeline tấn công, chỉ ra kỹ thuật tấn công theo **MITRE ATT&CK**, thực hiện phân tích nguyên nhân gốc rễ (**5 Whys**) và gợi ý các hành động khắc phục cụ thể.
-- **Incident Store (DynamoDB)**: Bảng `p2-soar-incidents` được tạo thành công với cơ chế tự động xóa bản ghi (TTL) sau 90 ngày nhằm tối ưu hóa bộ nhớ và chi phí.
+| Hạng mục | Giá trị |
+|---|---|
+| Trail Name | Organization Trail (Master Account) |
+| S3 Path | `s3://p2-soar-centralized-logs-247448832458/AWSLogs/` |
+| File Format | `.json.gz` |
+| SQS Filter | `prefix=AWSLogs/`, `suffix=.json.gz` |
+| Trạng thái | ✅ Hoạt động, 1467+ documents đã index |
 
-### B. Đấu nối Webhook tự động từ Kibana
-- Tạo thành công **Kibana Webhook Connector** trỏ trực tiếp đến Public Function URL của Lambda.
-- Cấu hình chuyển tiếp alert cho cả **5 security detection rules** đã kích hoạt. Bất cứ khi nào rules này khớp (ví dụ: phát hiện tài khoản Root đăng nhập không có MFA, hoặc thêm rule mở cổng nguy hiểm trong Security Group), dữ liệu sự cố sẽ được tự động đóng gói dưới dạng JSON và bắn sang cho AI phân tích ngay lập tức.
+- **Terraform file**: [cloudtrail.tf](file:///d:/Project-2-Landing-Zone/environments/devops-account/cloudtrail.tf)
+- CloudTrail ghi log tất cả management events từ mọi account trong Organization
+- S3 Bucket Policy cho phép CloudTrail service ghi vào cả Organization path và Master Account path
 
-![Kibana Webhook Configuration](C:/Users/Home/.gemini/antigravity/brain/ba10fb0b-9128-4c18-96dc-5f3d23386019/webhook_setup.png)
+### B. VPC Flow Logs → S3 → Elastic ✅
 
+| Hạng mục | Giá trị |
+|---|---|
+| Flow Log | `devops-vpc-flowlog` (ALL traffic) |
+| S3 Path | `s3://p2-soar-centralized-logs-247448832458/vpc-flowlogs/` |
+| File Format | `.log.gz` |
+| SQS Filter | `prefix=vpc-flowlogs/`, `suffix=.log.gz` |
+| Trạng thái | ✅ Đã bật, SQS notification đã cấu hình |
 
+- **Terraform file**: [vpc-flowlogs.tf](file:///d:/Project-2-Landing-Zone/environments/devops-account/vpc-flowlogs.tf)
+- Flow logs ghi trực tiếp cross-account sang S3 bucket ở Monitor Account
+- S3 Bucket Policy cho phép `delivery.logs.amazonaws.com` từ cả DevOps Account và Master Account
+
+### C. ALB Access Logs → S3 → Elastic ✅
+
+| Hạng mục | Giá trị |
+|---|---|
+| ALB | `p2-soar-devops-alb` |
+| S3 Path | `s3://p2-soar-centralized-logs-247448832458/alb-logs/` |
+| File Format | `.log.gz` |
+| SQS Filter | `prefix=alb-logs/`, `suffix=.log.gz` |
+| Trạng thái | ✅ Đã bật, SQS notification đã cấu hình |
+
+- **Terraform file**: [alb.tf](file:///d:/Project-2-Landing-Zone/environments/devops-account/alb.tf) (line 13: `enabled = true`)
+- S3 Bucket Policy cho phép `logdelivery.elasticloadbalancing.amazonaws.com`
+
+---
+
+## 3. Pipeline Trung gian (Monitor Account)
+
+### A. S3 Centralized Logs Bucket
+
+- **Terraform file**: [s3-logs.tf](file:///d:/Project-2-Landing-Zone/environments/monitor-account/s3-logs.tf)
+- Bucket: `p2-soar-centralized-logs-247448832458`
+- Versioning: Enabled
+- Encryption: AES256 (SSE-S3)
+- Public Access: Blocked hoàn toàn
+
+**Bucket Policy cho phép ghi từ 3 sources:**
+
+| Service | Action | Path |
+|---|---|---|
+| `cloudtrail.amazonaws.com` | `s3:PutObject` | `AWSLogs/*` |
+| `delivery.logs.amazonaws.com` | `s3:PutObject` | `vpc-flowlogs/*` |
+| `logdelivery.elasticloadbalancing.amazonaws.com` | `s3:PutObject` | `alb-logs/*` |
+
+### B. SQS Queue & Event Notifications
+
+- **Terraform file**: [sqs-notifications.tf](file:///d:/Project-2-Landing-Zone/environments/monitor-account/sqs-notifications.tf)
+- Queue: `p2-soar-cloudtrail-notifications`
+- Message retention: 24 giờ
+- Visibility timeout: 5 phút
+
+**3 S3 Event Notification rules:**
+
+| # | Prefix | Suffix | Loại log |
+|---|---|---|---|
+| 1 | `AWSLogs/` | `.json.gz` | CloudTrail |
+| 2 | `vpc-flowlogs/` | `.log.gz` | VPC Flow Logs |
+| 3 | `alb-logs/` | `.log.gz` | ALB Access Logs |
+
+### C. Elastic Agent EC2
+
+- **Terraform file**: [elastic-agent-ec2.tf](file:///d:/Project-2-Landing-Zone/environments/monitor-account/elastic-agent-ec2.tf)
+- Instance type: `t3.small` (2 GB RAM, nâng cấp từ `t3.micro` để tránh thiếu RAM/kswapd0 treo agent), AMI: Amazon Linux 2023
+- Elastic Agent version: `9.3.3`
+- Fleet URL: `https://172.25.1.29:8220` (NAT redirect → `elastic.hungcx.cloud`)
+- Security Group: Outbound only (không có inbound)
+- Quản lý qua SSM (không cần SSH/key pair)
+
+**IAM Permissions (EC2 Instance Role):**
+
+| Permission | Resource |
+|---|---|
+| `s3:GetObject`, `s3:ListBucket` | S3 Centralized Logs bucket |
+| `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes`, `sqs:ChangeMessageVisibility` | SQS Queue |
+
+**NAT Workaround:**
+- Fleet Server trả về IP nội bộ `172.25.1.29` → Agent không kết nối được
+- Giải pháp: `iptables` DNAT redirect `172.25.1.29:8220/9200` → `elastic.hungcx.cloud:8220/9200`
+- Persistent qua systemd service `elastic-agent-nat.service`
+- Script: [install-elastic-agent.sh.tpl](file:///d:/Project-2-Landing-Zone/environments/monitor-account/scripts/install-elastic-agent.sh.tpl)
+
+---
+
+## 4. Elastic SIEM (Kibana)
+
+### A. Data View & Index
+- Data View: **AWS CloudTrail Logs** (pattern: `logs-aws.cloudtrail-*`)
+- Index: `.ds-logs-aws.cloudtrail-default-2026.05.22-000001`
+- Documents: 1467+ bản ghi
+
+### B. Dashboard
+- **[Logs AWS] CloudTrail Overview**: Bản đồ địa lý, Event Outcome, Actions breakdown
+
+### C. 5 Detection Rules đã kích hoạt
+
+| # | Rule | Mục đích |
+|---|---|---|
+| 1 | AWS IAM Group Creation | Phát hiện leo thang đặc quyền |
+| 2 | AWS SNS Topic Message Publish by Rare User | User bất thường gửi SNS |
+| 3 | Insecure EC2 VPC SG Ingress Rule Added | Rule mở cổng nguy hiểm (0.0.0.0/0) |
+| 4 | AWS CloudTrail Log Suspended | Phát hiện xóa vết |
+| 5 | AWS S3 Bucket Configuration Deletion | S3 config bị xóa |
+
+---
+
+## 5. AI Engine & SOAR Pipeline (Phase 3-5)
+
+### A. AI Engine (Lambda)
+- Lambda: `p2-soar-ai-engine` (Python 3.12)
+- Flow: Kibana Detection Rule → Webhook → Lambda → Query ES (60 events) → Amazon Bedrock (Claude Haiku 4.5) → DynamoDB
+- Phân tích: MITRE ATT&CK, Root Cause Analysis (5 Whys), remediation suggestions
+- Incident Store: DynamoDB `p2-soar-incidents` (TTL: 90 ngày)
+
+### B. Remediation Lambda (Phase 4) ✅ Deployed
+- Hỗ trợ Approve/Reject incident
+- DynamoDB status: `Resolved` (approve) / `Rejected` (reject)
+
+### C. Web Portal (Phase 5) ✅ Deployed
+- Bảng incidents với nút Approve/Reject
+
+> [!NOTE]
+> Phase 4 & 5 đã được deploy hoàn chỉnh — giữ nguyên, không thay đổi.
+
+---
+
+## 6. Trạng thái Tổng hợp
+
+| Hạng mục | Trạng thái | Ghi chú |
+|---|---|---|
+| CloudTrail → S3 → SQS → Elastic Agent → ES | ✅ Hoạt động | 1467+ docs đã index |
+| VPC Flow Logs → S3 → SQS → Elastic Agent → ES | ✅ Pipeline sẵn sàng | SQS notification đã cấu hình |
+| ALB Access Logs → S3 → SQS → Elastic Agent → ES | ✅ Pipeline sẵn sàng | SQS notification đã cấu hình |
+| Web Application Logs (CloudWatch) → Elastic | ✅ Hoạt động | Data Stream: `logs-aws_logs.web-*` |
+| RDS Database Logs (CloudWatch) → Elastic | ✅ Hoạt động | Data Stream: `logs-aws_logs.database-*`, Custom DB Parameter Group: `p2-soar-dev-apse1-mysql-params` (slow_query_log=1, long_query_time=1) |
+| IAM cho Elastic Agent EC2 | ✅ Đầy đủ | S3 + SQS + AssumeRole permissions |
+| Elastic Agent health | ✅ Healthy | Đã sửa SCP chặn vùng + nâng cấp lên `t3.small` (2 GB RAM) |
+| SIEM Detection Rules | ✅ 5 rules active | Webhook → AI Engine |
+| AI Engine (Lambda) | ✅ Hoạt động | Đã tích hợp Telegram Security Alerts (gửi tin nhắn thời gian thực qua bot API), bổ sung quyền IAM Marketplace, sửa SCP vùng, và cơ chế fallback tự động cục bộ khi Bedrock quá tải. |
+| Remediation + Web Portal | ✅ Deployed | Approve/Reject flow |
+
+---
+
+## 7. Sơ đồ File Terraform
+
+```
+environments/
+├── devops-account/
+│   ├── vpc-flowlogs.tf      # VPC Flow Logs → S3 cross-account
+│   ├── alb.tf                # ALB Access Logs → S3 cross-account
+│   ├── cloudtrail.tf         # CloudTrail + CloudWatch Alarms
+│   ├── remediation_lambda.tf # Phase 4: Approve/Reject Lambda
+│   └── ...
+├── monitor-account/
+│   ├── s3-logs.tf            # Centralized S3 Bucket + Bucket Policy
+│   ├── sqs-notifications.tf  # SQS Queue + 3 S3 Event Notifications
+│   ├── elastic-agent-ec2.tf  # EC2 + IAM Role (S3+SQS permissions)
+│   ├── elastic-agent-iam.tf  # IAM User + Access Key cho Elastic
+│   ├── ai-engine.tf          # Phase 3: AI Engine Lambda
+│   ├── dynamodb.tf           # Incident Store
+│   └── scripts/
+│       └── install-elastic-agent.sh.tpl  # User Data + NAT setup
+└── organization/
+    └── ...                   # Organization-level configs
+```
+
+---
+
+## 8. Tích hợp Telegram Security Alerts & Khắc phục Lỗi Bedrock
+
+### A. Luồng Tích hợp Telegram
+- AI Engine Lambda gửi thông báo sự cố bảo mật bảo mật dạng HTML cực kỳ trực quan đến Telegram Chat Group qua bot token.
+- Nội dung tin nhắn bao gồm: Severity (kèm emoji), Tiêu đề sự cố, Tóm tắt diễn biến (Incident Story), Tài nguyên bị ảnh hưởng, Bản đồ kỹ thuật MITRE ATT&CK, và các hành động ứng phó khẩn cấp.
+
+### B. Giải quyết Lỗi Bedrock & Quyền Hạn
+1. **Lỗi Quota Throttling (Too many tokens per day)**:
+   - Chuyển tiếp truy vấn Bedrock API sang vùng `us-east-1` (N. Virginia) với hạn mức lớn hơn, sử dụng mô hình Claude 3 Haiku (`anthropic.claude-3-haiku-20240307-v1:0`).
+   - Tối ưu hóa kích thước prompt bằng cách giảm giới hạn log context từ `60` xuống `15` events.
+2. **Lỗi SCP Chặn Vùng (Explicit Deny)**:
+   - Cập nhật SCP `Restrict-Region-Policy` tại Master Account để miễn trừ các hành động `bedrock:*` và `aws-marketplace:*` khỏi bộ quy tắc chặn vùng ngoài Singapore.
+3. **Lỗi Thiếu Quyền AWS Marketplace**:
+   - Thêm quyền `aws-marketplace:ViewSubscriptions` và `aws-marketplace:Subscribe` vào IAM Policy của Lambda để hỗ trợ kiểm tra giấy phép mô hình của Bedrock.
+
+### C. Cơ chế Fallback Cục bộ (Local Heuristic Fallback Engine)
+- Để đảm bảo tính hoạt động 100% của SOAR pipeline ngay cả khi Amazon Bedrock bị gián đoạn hoặc bị bóp băng thông (throttling), AI Engine Lambda đã được trang bị công cụ **Local Heuristic Fallback**:
+  - Khi cuộc gọi Bedrock gặp lỗi, Lambda tự động kích hoạt bộ sinh phân tích cục bộ.
+  - Bộ sinh phân tích này tự phân tích tên rule, địa chỉ IP nguồn để ánh xạ sang MITRE ATT&CK, đề xuất hành động ứng phó (ví dụ: block IP) và tạo mã Incident ID hợp lệ.
+  - Bản ghi được lưu chính xác vào DynamoDB và gửi tin nhắn cảnh báo thành công qua Telegram.

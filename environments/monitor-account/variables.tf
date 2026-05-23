@@ -88,5 +88,24 @@ variable "elasticsearch_password" {
 variable "bedrock_model_id" {
   type        = string
   description = "Model ID dung tren Amazon Bedrock"
-  default     = "anthropic.claude-haiku-4-5"
+  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+}
+
+variable "bedrock_region" {
+  type        = string
+  description = "AWS region for Amazon Bedrock API calls"
+  default     = "us-east-1"
+}
+
+variable "telegram_bot_token" {
+  type        = string
+  description = "Telegram Bot Token (from @BotFather)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "telegram_chat_id" {
+  type        = string
+  description = "Telegram Chat ID to send alerts"
+  default     = ""
 }

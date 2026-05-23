@@ -90,6 +90,73 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "elastic_agent_ec2_policy" {
+  count = var.enable_elastic_agent_ec2 ? 1 : 0
+  name  = "${var.project_name}-elastic-agent-ec2-policy"
+  role  = aws_iam_role.elastic_agent_ec2[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowS3ReadLogs"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.centralized_logs.arn,
+          "${aws_s3_bucket.centralized_logs.arn}/*"
+        ]
+      },
+      {
+        Sid    = "AllowSQSProcessNotifications"
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = "arn:aws:sqs:${var.aws_region}:${var.monitor_account_id}:${var.project_name}-*"
+      },
+      {
+        Sid    = "AllowAssumeRole"
+        Effect = "Allow"
+        Action = [
+          "sts:AssumeRole"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowAWSIntegrationRead"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeRegions",
+          "ec2:DescribeInstances",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeTransitGateways",
+          "ec2:DescribeVolumes",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "rds:DescribeDBInstances",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:FilterLogEvents",
+          "logs:GetLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "elastic_agent_ec2" {
   count = var.enable_elastic_agent_ec2 ? 1 : 0
   name  = "${var.project_name}-elastic-agent-ec2-profile"
@@ -103,7 +170,7 @@ resource "aws_instance" "elastic_agent" {
   count = var.enable_elastic_agent_ec2 ? 1 : 0
 
   ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = "t3.micro"
+  instance_type          = "t3.small"
   subnet_id              = data.aws_subnets.default[0].ids[0]
   vpc_security_group_ids = [aws_security_group.elastic_agent[0].id]
   iam_instance_profile   = aws_iam_instance_profile.elastic_agent_ec2[0].name

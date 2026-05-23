@@ -1,3 +1,32 @@
+# Custom Parameter Group để bật Slow Query Log
+resource "aws_db_parameter_group" "mysql" {
+  name        = "${local.name_prefix}-mysql-params"
+  family      = "mysql8.0"
+  description = "Custom parameter group with slow query logging enabled"
+
+  parameter {
+    name  = "slow_query_log"
+    value = "1"
+  }
+
+  parameter {
+    name  = "long_query_time"
+    value = "1"
+  }
+
+  parameter {
+    name         = "log_output"
+    value        = "FILE"
+    apply_method = "pending-reboot"
+  }
+
+  tags = {
+    Name        = "${local.name_prefix}-mysql-params"
+    Environment = var.env
+    ManagedBy   = "Terraform"
+  }
+}
+
 resource "aws_db_subnet_group" "db" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.db[*].id
@@ -28,8 +57,8 @@ resource "aws_db_instance" "main" {
 
   allocated_storage = 20
   storage_type      = "gp2"
-  # ← THÊM DÒNG NÀY
   enabled_cloudwatch_logs_exports = ["error", "slowquery"]
+  parameter_group_name            = aws_db_parameter_group.mysql.name
 
   skip_final_snapshot = true
   tags = {

@@ -88,3 +88,53 @@ resource "aws_iam_role_policy_attachment" "ansible_s3_attachment" {
   policy_arn = aws_iam_policy.ansible_s3_policy.arn
 }
 
+# ==========================================
+# 🔐 CROSS-ACCOUNT ROLE — Cho phép Monitor Account Elastic Agent đọc CloudWatch logs
+# ==========================================
+resource "aws_iam_role" "elastic_cloudwatch_cross_account_role" {
+  name        = "${local.name_prefix}-elastic-cloudwatch-role"
+  description = "Cross-account IAM Role for Monitor Elastic Agent to read CloudWatch logs"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = [
+            "arn:aws:iam::${var.monitor_account_id}:root",
+            "arn:aws:iam::${var.monitor_account_id}:role/${var.project}-elastic-agent-ec2-role"
+          ]
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "elastic_cloudwatch_policy" {
+  name        = "${local.name_prefix}-elastic-cloudwatch-policy"
+  description = "Allows reading CloudWatch Logs in DevOps account"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:FilterLogEvents",
+          "logs:GetLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "elastic_cloudwatch_attach" {
+  role       = aws_iam_role.elastic_cloudwatch_cross_account_role.name
+  policy_arn = aws_iam_policy.elastic_cloudwatch_policy.arn
+}
+

@@ -55,3 +55,9 @@ output "asg_names" {
     for k, v in aws_autoscaling_group.app : k => v.name
   }
 }
+
+# ── Cross-Account Role ────────────────────────────────────────────────
+output "elastic_cloudwatch_role_arn" {
+  description = "ARN of the cross-account role for Elastic Agent to read CloudWatch logs"
+  value       = aws_iam_role.elastic_cloudwatch_cross_account_role.arn
+}

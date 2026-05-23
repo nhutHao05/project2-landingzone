@@ -97,7 +97,11 @@ resource "aws_organizations_policy" "restrict_region" {
           "support:*",
           "sts:*",
           "sso:*",
-          "budgets:*"
+          "budgets:*",
+          "ec2:DescribeRegions",
+          "ec2:DescribeAvailabilityZones",
+          "aws-marketplace:*",
+          "bedrock:*"
         ]
         Resource = "*"
         Condition = {

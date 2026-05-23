@@ -75,6 +75,8 @@ def lambda_handler(event, context):
             result = revoke_creds(target)
         elif action_type == 'block_ip':
             result = block_ip(target)
+        elif action_type == 'reject':
+            result = {'status': 'rejected'}
         else:
             return {
                 'statusCode': 400,
@@ -84,13 +86,14 @@ def lambda_handler(event, context):
 
         # Update DynamoDB status after an analyst-approved remediation or an
         # explicit automation payload from Elastic.
-        update_dynamodb_status(incident_id, action_type, 'Resolved')
+        status_to_set = 'Rejected' if action_type == 'reject' else 'Resolved'
+        update_dynamodb_status(incident_id, action_type, status_to_set)
 
         return {
             'statusCode': 200,
             'headers': headers,
             'body': json.dumps({
-                'message': f'Action {action_type} executed successfully on {target}',
+                'message': f'Action {action_type} executed successfully on {target}' if action_type != 'reject' else 'Incident rejected successfully',
                 'details': result
             })
         }

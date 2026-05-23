@@ -48,9 +48,11 @@ resource "aws_iam_policy" "ai_engine_policy" {
         Resource = aws_dynamodb_table.incidents.arn
       },
       {
-        # Amazon Bedrock (goi Claude)
+        # Amazon Bedrock (goi Claude) va Marketplace de check model subscription
         Action = [
-          "bedrock:InvokeModel"
+          "bedrock:InvokeModel",
+          "aws-marketplace:ViewSubscriptions",
+          "aws-marketplace:Subscribe"
         ]
         Effect   = "Allow"
         Resource = "*"
@@ -84,13 +86,15 @@ resource "aws_lambda_function" "ai_engine" {
 
   environment {
     variables = {
-      ES_URL           = var.elasticsearch_url
-      ES_USERNAME      = var.elasticsearch_username
-      ES_PASSWORD      = var.elasticsearch_password
-      ES_VERIFY_SSL    = "false"
-      DYNAMODB_TABLE   = aws_dynamodb_table.incidents.name
-      BEDROCK_REGION   = var.aws_region
-      BEDROCK_MODEL_ID = var.bedrock_model_id
+      ES_URL             = var.elasticsearch_url
+      ES_USERNAME        = var.elasticsearch_username
+      ES_PASSWORD        = var.elasticsearch_password
+      ES_VERIFY_SSL      = "false"
+      DYNAMODB_TABLE     = aws_dynamodb_table.incidents.name
+      BEDROCK_REGION     = var.bedrock_region
+      BEDROCK_MODEL_ID   = var.bedrock_model_id
+      TELEGRAM_BOT_TOKEN = var.telegram_bot_token
+      TELEGRAM_CHAT_ID   = var.telegram_chat_id
     }
   }
 
@@ -103,6 +107,14 @@ resource "aws_lambda_function" "ai_engine" {
 resource "aws_lambda_function_url" "ai_engine_url" {
   function_name      = aws_lambda_function.ai_engine.function_name
   authorization_type = "NONE" # Cho phep Kibana goi truc tiep (co the cai thien bang IAM sau neu can)
+}
+
+resource "aws_lambda_permission" "ai_engine_url" {
+  statement_id           = "AllowFunctionURLInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.ai_engine.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }
 
 output "ai_engine_webhook_url" {
