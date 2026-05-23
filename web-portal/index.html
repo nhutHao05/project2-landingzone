@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOAR Security Portal</title>
+    <meta name="description" content="AI-driven Security Operations and Incident Response Dashboard.">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-container" class="glass-panel login-screen">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <h2>SOAR Portal</h2>
+        </div>
+        <p>Enter your credentials to access the security dashboard.</p>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Username (Mock)" required autocomplete="off">
+            <input type="password" id="password" placeholder="Password (Mock)" required autocomplete="off">
+            <button type="submit" class="btn-primary">Authenticate</button>
+        </form>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard-container" class="dashboard hidden">
+        <aside class="sidebar glass-panel">
+            <div class="logo small-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <h3>SOAR</h3>
+            </div>
+            <nav>
+                <a href="#" class="active">Overview</a>
+                <a href="#">Incidents</a>
+                <a href="#">Attack Chains</a>
+                <a href="#">Settings</a>
+            </nav>
+            <div class="user-info">
+                <span id="user-display">Admin</span>
+                <button id="logout-btn" class="btn-secondary btn-small">Logout</button>
+            </div>
+        </aside>
+        
+        <main class="content">
+            <header>
+                <h1>Security Dashboard</h1>
+                <div class="status-badge pulse-red">3 Pending Actions</div>
+            </header>
+
+            <section class="metrics">
+                <div class="metric-card glass-panel">
+                    <h3>Total Incidents (24h)</h3>
+                    <div class="value">42</div>
+                </div>
+                <div class="metric-card glass-panel">
+                    <h3>Critical Alerts</h3>
+                    <div class="value alert-text">5</div>
+                </div>
+                <div class="metric-card glass-panel">
+                    <h3>Automated Mitigations</h3>
+                    <div class="value success-text">18</div>
+                </div>
+            </section>
+
+            <section class="incidents-section glass-panel">
+                <div class="section-header">
+                    <h2>AI-Analyzed Attack Chains</h2>
+                    <button id="refresh-btn" class="btn-secondary btn-small">Refresh</button>
+                </div>
+                
+                <div class="table-container">
+                    <table id="incidents-table">
+                        <thead>
+                            <tr>
+                                <th>Incident ID</th>
+                                <th>Severity</th>
+                                <th>AI Summary</th>
+                                <th>Recommended Action</th>
+                                <th>Target</th>
+                                <th>Status</th>
+                                <th>Approval</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incidents-body">
+                            <!-- Mock data will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Approve Modal -->
+    <div id="approve-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <h2>Approve Remediation</h2>
+            <p id="modal-description"></p>
+            <div class="code-block" id="modal-details"></div>
+            <div class="modal-actions">
+                <button id="cancel-btn" class="btn-secondary">Cancel</button>
+                <button id="confirm-btn" class="btn-primary">Execute Action</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

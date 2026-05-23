@@ -10,7 +10,7 @@ resource "aws_lb" "alb" {
   access_logs {
     bucket  = "${var.project}-centralized-logs-${var.monitor_account_id}"
     prefix  = "alb-logs"
-    enabled = true
+    enabled = false # TẠM TẮT: Bucket centralized-logs chưa được tạo ở account Monitor
   }
 
   tags = {
