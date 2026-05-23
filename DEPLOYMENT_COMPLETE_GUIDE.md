@@ -15,8 +15,8 @@
 ## 🏗️ TỔNG QUAN KIẾN TRÚC
 
 ### **Layer 1 - Web Tier (Public Access via ALB)**
-- **Ứng dụng**: Web QLSV (PHP)
-- **Truy cập**: `http://<ALB-DNS-NAME>/qlsv`
+- **Ứng dụng**: OpsDesk Web App (PHP)
+- **Truy cập**: `http://<ALB-DNS-NAME>/`
 - **Port**: 8080 (internal), 80 (ALB)
 - **Log Groups**:
   - `/aws/ec2/web-tier/system` - System logs
@@ -63,24 +63,15 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### Bước 2: Deploy Môi trường chính (VPC, EC2, ALB, RDS)
+### Bước 2: Deploy Hạ tầng (VPC, EC2, ALB, RDS, Lambda)
+*Thư mục `devops-account` chứa toàn bộ hạ tầng cốt lõi (Môi trường Dev) lẫn các dịch vụ bảo mật (Lambda, API Gateway).*
 ```bash
-cd ../environments/dev/
+cd ../environments/devops-account/
 terraform init
 terraform apply -auto-approve
 
 # Lưu lại các outputs quan trọng: alb_dns_name, db_endpoint, db_password
-```
-
-### Bước 3: Deploy DevOps Account (Remediation Lambda & API)
-*Lưu ý: Bước này sẽ tạo ra Lambda tự động khắc phục và cấp API Gateway URL cho Frontend.*
-```bash
-cd ../devops-account/
-terraform init
-terraform apply -auto-approve
-
-# Thành công sẽ in ra: remediation_api_url
-# (Đồng thời tự động sinh file web-portal/config.json)
+# (Thành công sẽ in ra cả remediation_api_url và tự sinh file web-portal/config.json)
 ```
 
 ---
@@ -101,8 +92,8 @@ chmod +x database/deploy_db.sh
 ```bash
 cd ../ansible/
 
-# Cập nhật group_vars/all.yml với thông tin DB_HOST và DB_PASS
-# Deploy toàn bộ stack (Bao gồm CloudWatch, Docker, QLSV và Web Portal)
+# Cập nhật thông số database vào file secrets hoặc parameter store
+# Deploy toàn bộ stack (Bao gồm CloudWatch, Docker, OpsDesk và Web Portal)
 ansible-playbook -i inventory/aws_ec2.yml playbooks/site.yml
 ```
 *Thao tác này sẽ dọn dẹp Streamlit AI cũ và đẩy source code mới của Web Portal lên EC2.*
@@ -132,10 +123,10 @@ Do AI Engine đã được tích hợp qua Lambda (Phase 3), bạn chỉ cần l
 
 ## 🌐 TRUY CẬP ỨNG DỤNG
 
-### Layer 1 - Web QLSV (Public)
-Mở browser: `http://<ALB-DNS-NAME>/qlsv`
+### Layer 1 - OpsDesk Web App (Public)
+Mở browser: `http://<ALB-DNS-NAME>/`
 - Admin: `admin` / `123@`
-- Giảng viên: `gv01` / `123@`
+- Ops Staff: `ops01` / `123@`
 
 ### Layer 2 - SOAR Web Portal (Private - Trạm điều khiển AI)
 ```bash
