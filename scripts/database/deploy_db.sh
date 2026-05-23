@@ -4,19 +4,23 @@ set -e
 echo "OpsDesk database deployment (via SSM Tunnel)"
 echo "==========================================="
 
-TERRAFORM_DIR="${TERRAFORM_DIR:-../../environments/devops-account}"
-SCHEMA_FILE="${SCHEMA_FILE:-../../web-app/database/schema.sql}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+TERRAFORM_DIR="${TERRAFORM_DIR:-$SCRIPT_DIR/../../environments/devops-account}"
+SCHEMA_FILE="${SCHEMA_FILE:-$SCRIPT_DIR/../../web-app/database/schema.sql}"
 DB_USER="${DB_USER:-admin}"
 DB_NAME="${DB_NAME:-opsdesk}"
 
 echo "Fetching variables from Terraform..."
-REAL_DB_HOST=$(cd "$TERRAFORM_DIR" && terraform output -raw db_endpoint | cut -d ':' -f 1)
+DB_ENDPOINT=$(cd "$TERRAFORM_DIR" && terraform output -raw db_endpoint)
+REAL_DB_HOST=$(echo "$DB_ENDPOINT" | cut -d ':' -f 1)
 DB_PASS=$(cd "$TERRAFORM_DIR" && terraform output -raw db_password)
+
+PROJECT_PREFIX=$(echo "$DB_ENDPOINT" | cut -d '-' -f 1-4)
 
 # Lấy 1 EC2 Instance đang chạy để làm cầu nối (Bastion)
 echo "Finding active EC2 instance for SSM Tunnel..."
 INSTANCE_ID=$(aws ec2 describe-instances \
-    --filters "Name=instance-state-name,Values=running" "Name=tag:Role,Values=app" \
+    --filters "Name=instance-state-name,Values=running" "Name=tag:Name,Values=${PROJECT_PREFIX}-l1-node-1" \
     --query 'Reservations[0].Instances[0].InstanceId' \
     --output text)
 
@@ -24,6 +28,10 @@ if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
     echo "❌ Không tìm thấy EC2 instance nào đang chạy để làm cầu nối!"
     exit 1
 fi
+
+echo "Cleaning up any old SSM tunnels on port 33060..."
+pkill -f "session-manager-plugin" || true
+sleep 2
 
 echo "Opening SSM Port Forwarding Tunnel via $INSTANCE_ID..."
 # Mở tunnel ở background trên port 33060

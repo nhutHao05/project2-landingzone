@@ -13,7 +13,7 @@
     # ── Step 1: Download CloudWatch Agent ─────────────────
     - name: Download CloudWatch Agent RPM
       get_url:
-        url: "https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/{{ cloudwatch_agent_version }}/amazon-cloudwatch-agent.rpm"
+        url: "https://s3.ap-southeast-1.amazonaws.com/amazoncloudwatch-agent-ap-southeast-1/amazon_linux/amd64/{{ cloudwatch_agent_version }}/amazon-cloudwatch-agent.rpm"
         dest: /tmp/amazon-cloudwatch-agent.rpm
         mode: '0644'
       register: download_result

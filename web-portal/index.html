@@ -30,11 +30,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                 <h3>SOAR</h3>
             </div>
-            <nav>
-                <a href="#" class="active">Overview</a>
-                <a href="#">Incidents</a>
-                <a href="#">Attack Chains</a>
-                <a href="#">Settings</a>
+            <nav id="sidebar-nav">
+                <a href="#" data-target="overview-view" class="active">Overview</a>
+                <a href="#" data-target="incidents-view">Incidents</a>
+                <a href="#" data-target="attack-chains-view">Attack Chains</a>
+                <a href="#" data-target="settings-view">Settings</a>
             </nav>
             <div class="user-info">
                 <span id="user-display">Admin</span>
@@ -45,49 +45,75 @@
         <main class="content">
             <header>
                 <h1>Security Dashboard</h1>
-                <div class="status-badge pulse-red">3 Pending Actions</div>
+                <div class="status-badge pulse-red" id="pending-actions-badge">0 Pending Actions</div>
             </header>
 
-            <section class="metrics">
-                <div class="metric-card glass-panel">
-                    <h3>Total Incidents (24h)</h3>
-                    <div class="value">42</div>
-                </div>
-                <div class="metric-card glass-panel">
-                    <h3>Critical Alerts</h3>
-                    <div class="value alert-text">5</div>
-                </div>
-                <div class="metric-card glass-panel">
-                    <h3>Automated Mitigations</h3>
-                    <div class="value success-text">18</div>
-                </div>
-            </section>
+            <div id="overview-view" class="view-section active">
+                <section class="metrics">
+                    <div class="metric-card glass-panel">
+                        <h3>Total Incidents (24h)</h3>
+                        <div class="value" id="metric-total">0</div>
+                    </div>
+                    <div class="metric-card glass-panel">
+                        <h3>Critical Alerts</h3>
+                        <div class="value alert-text" id="metric-critical">0</div>
+                    </div>
+                    <div class="metric-card glass-panel">
+                        <h3>Automated Mitigations</h3>
+                        <div class="value success-text" id="metric-mitigations">0</div>
+                    </div>
+                </section>
 
-            <section class="incidents-section glass-panel">
-                <div class="section-header">
-                    <h2>AI-Analyzed Attack Chains</h2>
-                    <button id="refresh-btn" class="btn-secondary btn-small">Refresh</button>
+                <section class="incidents-section glass-panel">
+                    <div class="section-header">
+                        <h2>AI-Analyzed Attack Chains</h2>
+                        <button id="refresh-btn" class="btn-secondary btn-small">Refresh</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="incidents-table">
+                            <thead>
+                                <tr>
+                                    <th>Incident ID</th>
+                                    <th>Severity</th>
+                                    <th>AI Summary</th>
+                                    <th>Recommended Action</th>
+                                    <th>Target</th>
+                                    <th>Status</th>
+                                    <th>Approval</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incidents-body">
+                                <!-- Mock data will be injected here -->
+                            </tbody>
+                        </table>
+                        <div id="empty-state" class="empty-state hidden">
+                            <p>No incidents found. System is secure.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div id="incidents-view" class="view-section hidden">
+                <div class="glass-panel" style="padding: 2rem; text-align: center;">
+                    <h2>All Incidents</h2>
+                    <p style="color: var(--text-muted); margin-top: 1rem;">No historical incidents available.</p>
                 </div>
-                
-                <div class="table-container">
-                    <table id="incidents-table">
-                        <thead>
-                            <tr>
-                                <th>Incident ID</th>
-                                <th>Severity</th>
-                                <th>AI Summary</th>
-                                <th>Recommended Action</th>
-                                <th>Target</th>
-                                <th>Status</th>
-                                <th>Approval</th>
-                            </tr>
-                        </thead>
-                        <tbody id="incidents-body">
-                            <!-- Mock data will be injected here -->
-                        </tbody>
-                    </table>
+            </div>
+
+            <div id="attack-chains-view" class="view-section hidden">
+                <div class="glass-panel" style="padding: 2rem; text-align: center;">
+                    <h2>Attack Chains Explorer</h2>
+                    <p style="color: var(--text-muted); margin-top: 1rem;">No active attack chains detected.</p>
                 </div>
-            </section>
+            </div>
+
+            <div id="settings-view" class="view-section hidden">
+                <div class="glass-panel" style="padding: 2rem; text-align: center;">
+                    <h2>Portal Settings</h2>
+                    <p style="color: var(--text-muted); margin-top: 1rem;">System configuration is managed via AWS Systems Manager.</p>
+                </div>
+            </div>
         </main>
     </div>
 

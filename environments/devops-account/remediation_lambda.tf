@@ -66,10 +66,12 @@ resource "aws_iam_role_policy" "remediation_lambda_policy" {
         Action = [
           "dynamodb:UpdateItem",
           "dynamodb:GetItem",
-          "dynamodb:PutItem"
+          "dynamodb:PutItem",
+          "dynamodb:Scan",
+          "dynamodb:Query"
         ]
         Effect   = "Allow"
-        Resource = "*"
+        Resource = aws_dynamodb_table.soar_incidents.arn
       }
     ]
   })
@@ -86,7 +88,7 @@ resource "aws_lambda_function" "remediation_lambda" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE = "p2-soar-incidents"
+      DYNAMODB_TABLE = aws_dynamodb_table.soar_incidents.name
     }
   }
 
@@ -105,6 +107,12 @@ resource "aws_api_gateway_resource" "remediation_resource" {
   rest_api_id = aws_api_gateway_rest_api.remediation_api.id
   parent_id   = aws_api_gateway_rest_api.remediation_api.root_resource_id
   path_part   = "remediate"
+}
+
+resource "aws_api_gateway_resource" "incidents_resource" {
+  rest_api_id = aws_api_gateway_rest_api.remediation_api.id
+  parent_id   = aws_api_gateway_rest_api.remediation_api.root_resource_id
+  path_part   = "incidents"
 }
 
 # OPTIONS method for CORS
@@ -141,6 +149,38 @@ resource "aws_api_gateway_integration" "remediation_post_integration" {
   uri                     = aws_lambda_function.remediation_lambda.invoke_arn
 }
 
+resource "aws_api_gateway_method" "incidents_options" {
+  rest_api_id   = aws_api_gateway_rest_api.remediation_api.id
+  resource_id   = aws_api_gateway_resource.incidents_resource.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "incidents_options_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.remediation_api.id
+  resource_id             = aws_api_gateway_resource.incidents_resource.id
+  http_method             = aws_api_gateway_method.incidents_options.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.remediation_lambda.invoke_arn
+}
+
+resource "aws_api_gateway_method" "incidents_get" {
+  rest_api_id   = aws_api_gateway_rest_api.remediation_api.id
+  resource_id   = aws_api_gateway_resource.incidents_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "incidents_get_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.remediation_api.id
+  resource_id             = aws_api_gateway_resource.incidents_resource.id
+  http_method             = aws_api_gateway_method.incidents_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.remediation_lambda.invoke_arn
+}
+
 resource "aws_lambda_permission" "apigw_lambda" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -152,18 +192,23 @@ resource "aws_lambda_permission" "apigw_lambda" {
 resource "aws_api_gateway_deployment" "remediation_deployment" {
   depends_on = [
     aws_api_gateway_integration.remediation_options_integration,
-    aws_api_gateway_integration.remediation_post_integration
+    aws_api_gateway_integration.remediation_post_integration,
+    aws_api_gateway_integration.incidents_options_integration,
+    aws_api_gateway_integration.incidents_get_integration
   ]
   rest_api_id = aws_api_gateway_rest_api.remediation_api.id
 
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.remediation_resource.id,
+      aws_api_gateway_resource.incidents_resource.id,
       aws_api_gateway_method.remediation_post.id,
-      aws_api_gateway_integration.remediation_post_integration.id
+      aws_api_gateway_method.incidents_get.id,
+      aws_api_gateway_integration.remediation_post_integration.id,
+      aws_api_gateway_integration.incidents_get_integration.id
     ]))
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -176,6 +221,11 @@ resource "aws_api_gateway_stage" "remediation_stage" {
 }
 
 output "remediation_api_url" {
-  value = "${aws_api_gateway_stage.remediation_stage.invoke_url}/remediate"
+  value       = "${aws_api_gateway_stage.remediation_stage.invoke_url}/remediate"
   description = "The URL of the remediation API Gateway"
+}
+
+output "incidents_api_url" {
+  value       = "${aws_api_gateway_stage.remediation_stage.invoke_url}/incidents"
+  description = "The URL used by the web portal to fetch live incidents"
 }

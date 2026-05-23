@@ -1,33 +1,9 @@
 // Configuration
 let API_GATEWAY_URL = ''; // Will be loaded from config.json
+let INCIDENTS_API_URL = '';
 
-// Mock Data
-const mockIncidents = [
-    {
-        id: 'INC-20260523-001',
-        severity: 'Critical',
-        summary: 'Multiple failed SSH logins followed by successful login from anomalous IP, then suspicious lateral movement via SSM.',
-        action: 'isolate_ec2',
-        target: 'i-0abcdef1234567890',
-        status: 'pending_approval'
-    },
-    {
-        id: 'INC-20260523-002',
-        severity: 'High',
-        summary: 'IAM User "dev-intern" created 3 new administrator access keys and attempted to disable CloudTrail.',
-        action: 'revoke_creds',
-        target: 'dev-intern',
-        status: 'pending_approval'
-    },
-    {
-        id: 'INC-20260523-003',
-        severity: 'High',
-        summary: 'SQL Injection pattern detected originating from external IP addressing Web Tier ALB.',
-        action: 'block_ip',
-        target: '198.51.100.42',
-        status: 'pending_approval'
-    }
-];
+let incidents = [];
+let refreshTimer = null;
 
 // DOM Elements
 const loginContainer = document.getElementById('login-container');
@@ -46,64 +22,167 @@ const refreshBtn = document.getElementById('refresh-btn');
 
 let currentIncident = null;
 
+async function loadConfig() {
+    const res = await fetch('config.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Unable to load config.json');
+
+    const config = await res.json();
+    API_GATEWAY_URL = config.API_GATEWAY_URL || '';
+    INCIDENTS_API_URL = config.INCIDENTS_API_URL || API_GATEWAY_URL.replace(/\/remediate\/?$/, '/incidents');
+    console.log('Loaded API Config:', { API_GATEWAY_URL, INCIDENTS_API_URL });
+}
+
 // Auth Logic (Mock)
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     // Load config before entering dashboard
     try {
-        const res = await fetch('config.json');
-        if (res.ok) {
-            const config = await res.json();
-            API_GATEWAY_URL = config.API_GATEWAY_URL;
-            console.log("Loaded API Config:", API_GATEWAY_URL);
-        }
+        await loadConfig();
     } catch (err) {
-        console.warn("Could not load config.json, using mock API URL");
+        console.warn('Could not load config.json:', err);
     }
 
     const username = document.getElementById('username').value;
-    
+
     // Simulate login
     userDisplay.textContent = username || 'Admin';
     loginContainer.classList.add('hidden');
     dashboardContainer.classList.remove('hidden');
-    
-    renderTable();
+
+    await fetchIncidents();
+    startAutoRefresh();
 });
 
 logoutBtn.addEventListener('click', () => {
+    stopAutoRefresh();
     dashboardContainer.classList.add('hidden');
     loginContainer.classList.remove('hidden');
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
 });
 
+async function fetchIncidents({ silent = false } = {}) {
+    if (!INCIDENTS_API_URL) {
+        incidents = [];
+        renderTable();
+        if (!silent) showToast('Incidents API is not configured. Run Terraform to refresh config.json.', true);
+        return;
+    }
+
+    try {
+        const res = await fetch(INCIDENTS_API_URL, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not fetch incidents');
+
+        incidents = Array.isArray(data.incidents) ? data.incidents.map(normalizeIncident) : [];
+        renderTable();
+        if (!silent) showToast(`Loaded ${incidents.length} live incident(s).`);
+    } catch (err) {
+        if (!silent) showToast(`Error: ${err.message}`, true);
+    }
+}
+
+function startAutoRefresh() {
+    stopAutoRefresh();
+    refreshTimer = setInterval(() => fetchIncidents({ silent: true }), 30000);
+}
+
+function stopAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = null;
+}
+
+function normalizeIncident(inc) {
+    const status = inc.incident_status || inc.status || 'Pending Approval';
+    const action = inc.action_type || inc.remediation_action || inc.recommended_action || 'block_ip';
+
+    return {
+        id: inc.incident_id || inc.id || 'unknown',
+        severity: inc.severity || 'High',
+        summary: inc.summary || inc.message || 'Elastic SIEM alert received',
+        action,
+        target: inc.target || inc.source_ip || inc.destination_ip || 'unknown',
+        status: status.toLowerCase().replace(/\s+/g, '_'),
+        timestamp: inc.timestamp || inc.updated_at || ''
+    };
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[char]));
+}
+
 // Rendering Logic
 function renderTable() {
     tbody.innerHTML = '';
-    mockIncidents.forEach(inc => {
+    const tableElement = document.getElementById('incidents-table');
+    const emptyState = document.getElementById('empty-state');
+    const pendingBadge = document.getElementById('pending-actions-badge');
+    const metricTotal = document.getElementById('metric-total');
+    const metricCritical = document.getElementById('metric-critical');
+    const metricMitigations = document.getElementById('metric-mitigations');
+
+    const criticalCount = incidents.filter(inc => inc.severity.toLowerCase() === 'critical').length;
+    const resolvedCount = incidents.filter(inc => inc.status === 'resolved').length;
+
+    metricTotal.textContent = incidents.length;
+    metricCritical.textContent = criticalCount;
+    metricMitigations.textContent = resolvedCount;
+
+    if (incidents.length === 0) {
+        tableElement.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        pendingBadge.textContent = '0 Pending Actions';
+        pendingBadge.classList.remove('pulse-red');
+        pendingBadge.style.background = 'var(--success)';
+        return;
+    }
+
+    tableElement.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+
+    let pendingCount = 0;
+
+    incidents.forEach(inc => {
         const tr = document.createElement('tr');
-        
+
         const sevClass = inc.severity.toLowerCase() === 'critical' ? 'critical' : 'high';
         const statusClass = inc.status === 'pending_approval' ? 'pending' : 'resolved';
         const statusText = inc.status === 'pending_approval' ? 'Pending Approval' : 'Resolved';
-        
+
+        if (inc.status === 'pending_approval') pendingCount++;
+
         tr.innerHTML = `
-            <td><strong>${inc.id}</strong></td>
-            <td><span class="badge ${sevClass}">${inc.severity}</span></td>
-            <td>${inc.summary}</td>
-            <td><code>${inc.action}</code></td>
-            <td>${inc.target}</td>
+            <td><strong>${escapeHtml(inc.id)}</strong></td>
+            <td><span class="badge ${sevClass}">${escapeHtml(inc.severity)}</span></td>
+            <td>${escapeHtml(inc.summary)}</td>
+            <td><code>${escapeHtml(inc.action)}</code></td>
+            <td>${escapeHtml(inc.target)}</td>
             <td><span class="badge ${statusClass}">${statusText}</span></td>
             <td>
-                ${inc.status === 'pending_approval' 
-                    ? `<button class="btn-primary btn-small approve-trigger" data-id="${inc.id}">Approve</button>` 
+                ${inc.status === 'pending_approval'
+                    ? `<button class="btn-primary btn-small approve-trigger" data-id="${escapeHtml(inc.id)}">Approve</button>`
                     : '<button class="btn-secondary btn-small" disabled>Done</button>'}
             </td>
         `;
         tbody.appendChild(tr);
     });
+
+    if (pendingCount > 0) {
+        pendingBadge.textContent = `${pendingCount} Pending Actions`;
+        pendingBadge.classList.add('pulse-red');
+        pendingBadge.style.background = 'var(--danger)';
+    } else {
+        pendingBadge.textContent = '0 Pending Actions';
+        pendingBadge.classList.remove('pulse-red');
+        pendingBadge.style.background = 'var(--success)';
+    }
 
     // Attach events to newly created buttons
     document.querySelectorAll('.approve-trigger').forEach(btn => {
@@ -114,19 +193,45 @@ function renderTable() {
     });
 }
 
+// Tab Switching Logic
+document.querySelectorAll('#sidebar-nav a').forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        // Remove active class from all links
+        document.querySelectorAll('#sidebar-nav a').forEach(l => l.classList.remove('active'));
+        // Add active class to clicked link
+        e.target.classList.add('active');
+
+        // Hide all views
+        document.querySelectorAll('.view-section').forEach(view => {
+            view.classList.add('hidden');
+            view.classList.remove('active');
+        });
+
+        // Show target view
+        const targetId = e.target.getAttribute('data-target');
+        const targetView = document.getElementById(targetId);
+        if (targetView) {
+            targetView.classList.remove('hidden');
+            targetView.classList.add('active');
+        }
+    });
+});
+
 // Modal Logic
 function openModal(id) {
-    currentIncident = mockIncidents.find(i => i.id === id);
+    currentIncident = incidents.find(i => i.id === id);
     if (!currentIncident) return;
-    
+
     modalDescription.textContent = `Are you sure you want to execute "${currentIncident.action}" on target "${currentIncident.target}" to remediate incident ${currentIncident.id}?`;
-    
+
     modalDetails.textContent = JSON.stringify({
         incident_id: currentIncident.id,
         action_type: currentIncident.action,
         target: currentIncident.target
     }, null, 2);
-    
+
     approveModal.classList.remove('hidden');
 }
 
@@ -137,7 +242,7 @@ cancelBtn.addEventListener('click', () => {
 
 confirmBtn.addEventListener('click', async () => {
     if (!currentIncident) return;
-    
+
     const payload = {
         incident_id: currentIncident.id,
         action_type: currentIncident.action,
@@ -161,14 +266,15 @@ confirmBtn.addEventListener('click', async () => {
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
-            if(!res.ok) throw new Error(data.error || 'API Error');
+            if (!res.ok) throw new Error(data.error || 'API Error');
             showToast(`Success: ${data.message || 'Action executed'}`);
         }
-        
+
         // Update local state
         currentIncident.status = 'resolved';
         renderTable();
-        
+        await fetchIncidents({ silent: true });
+
     } catch (err) {
         showToast(`Error: ${err.message}`, true);
     } finally {
@@ -180,10 +286,9 @@ confirmBtn.addEventListener('click', async () => {
     }
 });
 
-refreshBtn.addEventListener('click', () => {
+refreshBtn.addEventListener('click', async () => {
     showToast('Refreshing incident data...');
-    // In a real app, this would fetch from an API
-    setTimeout(renderTable, 500);
+    await fetchIncidents();
 });
 
 // Toast Logic
@@ -191,7 +296,7 @@ function showToast(message, isError = false) {
     toast.textContent = message;
     toast.style.borderColor = isError ? 'var(--danger)' : 'var(--accent)';
     toast.classList.remove('hidden');
-    
+
     setTimeout(() => {
         toast.classList.add('hidden');
     }, 4000);
