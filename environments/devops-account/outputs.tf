@@ -61,3 +61,8 @@ output "elastic_cloudwatch_role_arn" {
   description = "ARN of the cross-account role for Elastic Agent to read CloudWatch logs"
   value       = aws_iam_role.elastic_cloudwatch_cross_account_role.arn
 }
+
+output "monitor_remediation_role_arn" {
+  description = "ARN of the cross-account role that Monitor remediation Lambda assumes"
+  value       = aws_iam_role.monitor_remediation_cross_account_role.arn
+}

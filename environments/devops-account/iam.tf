@@ -138,3 +138,67 @@ resource "aws_iam_role_policy_attachment" "elastic_cloudwatch_attach" {
   policy_arn = aws_iam_policy.elastic_cloudwatch_policy.arn
 }
 
+# ==========================================
+# CROSS-ACCOUNT ROLE — Cho phép Monitor remediation Lambda thao tác tài nguyên DevOps
+# ==========================================
+resource "aws_iam_role" "monitor_remediation_cross_account_role" {
+  name        = "${local.name_prefix}-monitor-remediation-role"
+  description = "Cross-account role assumed by Monitor remediation Lambda for approved SOAR actions"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.monitor_account_id}:role/${var.monitor_remediation_lambda_role_name}"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "monitor_remediation_cross_account_policy" {
+  name        = "${local.name_prefix}-monitor-remediation-policy"
+  description = "Allows Monitor remediation Lambda to execute approved actions in DevOps account"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeSecurityGroups",
+          "ec2:CreateSecurityGroup",
+          "ec2:RevokeSecurityGroupEgress",
+          "ec2:ModifyInstanceAttribute"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:ListAccessKeys",
+          "iam:UpdateAccessKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "wafv2:GetIPSet",
+          "wafv2:UpdateIPSet"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "monitor_remediation_cross_account_attach" {
+  role       = aws_iam_role.monitor_remediation_cross_account_role.name
+  policy_arn = aws_iam_policy.monitor_remediation_cross_account_policy.arn
+}
+

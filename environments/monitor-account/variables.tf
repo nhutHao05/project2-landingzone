@@ -16,7 +16,7 @@ variable "monitor_account_id" {
 variable "project_name" {
   type        = string
   description = "Ten cua du an dung de lam prefix cho S3 Bucket"
-  default     = "project2-soar"
+  default     = "p2-soar"
 }
 
 variable "aws_profile" {
@@ -49,6 +49,18 @@ variable "enable_elastic_agent_ec2" {
   type        = bool
   description = "Bat/tat viec tao EC2 cho Elastic Agent. Bat sau khi lay Fleet URL va Enrollment Token tu Kibana."
   default     = false
+}
+
+variable "enable_web_portal_ec2" {
+  type        = bool
+  description = "Bat/tat EC2 rieng de host static Web Portal trong Monitor Account"
+  default     = true
+}
+
+variable "web_portal_instance_type" {
+  type        = string
+  description = "Instance type cho Web Portal EC2"
+  default     = "t3.micro"
 }
 
 variable "elastic_fleet_url" {
@@ -108,4 +120,28 @@ variable "telegram_chat_id" {
   type        = string
   description = "Telegram Chat ID to send alerts"
   default     = ""
+}
+
+variable "devops_remediation_role_arn" {
+  type        = string
+  description = "ARN cua IAM role ben DevOps account ma Monitor remediation Lambda se assume de thao tac cross-account"
+  default     = ""
+}
+
+variable "devops_project" {
+  type        = string
+  description = "Project prefix cua DevOps account dung de tinh default remediation role ARN"
+  default     = "p2-soar"
+}
+
+variable "devops_env" {
+  type        = string
+  description = "Environment cua DevOps account dung de tinh default remediation role ARN"
+  default     = "dev"
+}
+
+variable "devops_region_short" {
+  type        = string
+  description = "Region short name cua DevOps account dung de tinh default remediation role ARN"
+  default     = "apse1"
 }

@@ -1,6 +1,6 @@
 ---
 - name: Deploy Web Portal (Replaces Log Analyzer)
-  hosts: role_app
+  hosts: role_portal
   become: yes
   tasks:
     - name: Ensure web-portal directory exists

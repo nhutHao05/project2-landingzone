@@ -70,7 +70,6 @@ variable "app_ssm_prefix" {
 variable "monitor_account_id" {
   type        = string
   description = "AWS Account ID của tài khoản Monitor để đẩy logs"
-  default     = ""
 }
 
 variable "devops_account_id" {
@@ -79,4 +78,8 @@ variable "devops_account_id" {
   default     = ""
 }
 
-
+variable "monitor_remediation_lambda_role_name" {
+  type        = string
+  description = "Ten IAM role cua Monitor remediation Lambda duoc phep assume role remediate ben DevOps"
+  default     = "p2-soar-remediation-lambda-role"
+}

@@ -27,12 +27,12 @@ data "aws_ami" "amazon_linux_2023" {
 
 # Lấy Default VPC của Monitor Account (không cần tạo VPC riêng cho agent nhỏ này)
 data "aws_vpc" "default" {
-  count   = var.enable_elastic_agent_ec2 ? 1 : 0
+  count   = (var.enable_elastic_agent_ec2 || var.enable_web_portal_ec2) ? 1 : 0
   default = true
 }
 
 data "aws_subnets" "default" {
-  count = var.enable_elastic_agent_ec2 ? 1 : 0
+  count = (var.enable_elastic_agent_ec2 || var.enable_web_portal_ec2) ? 1 : 0
 
   filter {
     name   = "vpc-id"
