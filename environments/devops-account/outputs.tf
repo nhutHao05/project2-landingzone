@@ -46,13 +46,13 @@ output "alb_dns_name" {
 
 # ── Compute ───────────────────────────────────────────────────────────
 output "ec2_instance_ids" {
-  description = "IDs của 2 EC2 app node — dùng cho SSM session và debug"
-  value       = { for k, v in aws_autoscaling_group.app : k => v.id }
+  description = "Auto Scaling Group IDs for the web tier"
+  value       = { for k, v in aws_autoscaling_group.web : k => v.id }
 }
 output "asg_names" {
   description = "Names of all ASGs"
   value = {
-    for k, v in aws_autoscaling_group.app : k => v.name
+    for k, v in aws_autoscaling_group.web : k => v.name
   }
 }
 

@@ -48,14 +48,7 @@ resource "aws_vpc_security_group_ingress_rule" "web_from_alb" {
   ip_protocol                  = "tcp"
 }
 
-# ── LAYER 2: LOG ANALYSIS SG (CHỈ nhận từ LAYER 1) ──────────────────────
-resource "aws_security_group" "app" {
-  name        = "${local.name_prefix}-sg-app"
-  description = "Layer 2: Internal Log Analysis Logic"
-  vpc_id      = aws_vpc.main.id
 
-  tags = { Name = "${local.name_prefix}-sg-layer-2" }
-}
 
 # ── SSM ENDPOINTS SG (Cổng dùng chung cho tất cả các máy kết nối SSM) ──
 resource "aws_security_group" "ssm_endpoints" {
@@ -81,11 +74,7 @@ resource "aws_vpc_security_group_egress_rule" "web_egress" {
   ip_protocol       = "-1"
 }
 
-resource "aws_vpc_security_group_egress_rule" "app_egress" {
-  security_group_id = aws_security_group.app.id
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "-1"
-}
+
 
 # ── DB SG — chỉ nhận từ App SG ──────────────────────────────────────
 resource "aws_security_group" "db" {

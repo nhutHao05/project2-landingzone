@@ -55,8 +55,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.db.name
   vpc_security_group_ids = [aws_security_group.db.id]
 
-  allocated_storage = 20
-  storage_type      = "gp2"
+  allocated_storage               = 20
+  storage_type                    = "gp2"
   enabled_cloudwatch_logs_exports = ["error", "slowquery"]
   parameter_group_name            = aws_db_parameter_group.mysql.name
 

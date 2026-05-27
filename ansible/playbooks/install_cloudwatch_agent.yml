@@ -52,7 +52,6 @@
         owner: root
         group: root
       loop:
-        - /var/log/app/php-error.log
         - /var/log/app/application.log
       when: "'web' in group_names or 'web' in inventory_hostname or 'l1' in inventory_hostname"
 

@@ -8,7 +8,7 @@ try {
     json_response([
         'status' => 'ok',
         'database' => 'connected',
-        'app' => env_value('APP_NAME', 'OpsDesk'),
+        'app' => env_value('APP_NAME', 'CyberMart'),
     ]);
 } catch (Throwable $error) {
     error_log('Health check failed: ' . $error->getMessage());

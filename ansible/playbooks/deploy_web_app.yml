@@ -1,9 +1,9 @@
 ---
-- name: Deploy OpsDesk Web App
+- name: Deploy CyberMart Web App
   hosts: role_web
   become: yes
   vars:
-    app_name: opsdesk-web
+    app_name: cybermart-web
     host_port: 8080
     container_port: 80
     log_dir: /var/log/app
@@ -18,6 +18,11 @@
         group: ec2-user
         mode: '0755'
 
+    - name: Ensure destination directory is clean
+      file:
+        path: "/home/ec2-user/{{ app_name }}"
+        state: absent
+
     - name: Ensure destination directory exists
       file:
         path: "/home/ec2-user/{{ app_name }}"
@@ -26,22 +31,37 @@
         group: ec2-user
         mode: '0755'
 
-    - name: Copy PHP source code to remote host
+    - name: Copy CyberMart source code to remote host
       copy:
         src: "../../web-app/"
         dest: "/home/ec2-user/{{ app_name }}/"
         owner: ec2-user
         group: ec2-user
 
-    - name: Build PHP Docker image
-      community.docker.docker_image:
-        name: "{{ app_name }}"
-        build:
-          path: "/home/ec2-user/{{ app_name }}"
-        source: build
-        state: present
-      async: 900
-      poll: 10
+    - name: Create swap file (2GB) to prevent OOM during Node.js build
+      command: dd if=/dev/zero of=/swapfile bs=1M count=2048
+      args:
+        creates: /swapfile
+
+    - name: Set swap file permissions
+      file:
+        path: /swapfile
+        mode: '0600'
+
+    - name: Make swap
+      command: mkswap /swapfile
+      ignore_errors: yes
+
+    - name: Enable swap
+      command: swapon /swapfile
+      ignore_errors: yes
+
+    - name: Build CyberMart Docker image
+      command: docker build -t {{ app_name }}:latest .
+      args:
+        chdir: "/home/ec2-user/{{ app_name }}"
+      async: 1800
+      poll: 15
 
     - name: Remove legacy web container if it exists
       community.docker.docker_container:
@@ -49,7 +69,18 @@
         state: absent
       ignore_errors: yes
 
-    - name: Run PHP Web App container with logging
+    - name: Remove old OpsDesk container if it exists
+      community.docker.docker_container:
+        name: opsdesk-web
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove containers already using the web port
+      shell: |
+        docker ps -aq --filter "publish={{ host_port }}" | xargs -r docker rm -f
+      changed_when: false
+
+    - name: Run CyberMart container with logging
       community.docker.docker_container:
         name: "{{ app_name }}"
         image: "{{ app_name }}:latest"
@@ -65,32 +96,20 @@
           max-size: "10m"
           max-file: "3"
         env:
-          APP_NAME: OpsDesk
-          PHP_ERROR_LOG: /var/log/app/php-error.log
+          APP_NAME: CyberMart
+          NODE_ENV: production
+          PORT: "{{ container_port | string }}"
+          HOSTNAME: "0.0.0.0"
           APP_LOG_FILE: /var/log/app/application.log
           DB_HOST: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/host') }}"
+          DB_PORT: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/port', errors='ignore') | default('3306', true) }}"
           DB_USER: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/user') }}"
           DB_PASS: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/password') }}"
           DB_NAME: "{{ lookup('amazon.aws.ssm_parameter', ssm_prefix ~ '/name') }}"
 
-    - name: Configure PHP error logging in container
-      shell: |
-        docker exec {{ app_name }} bash -c "echo 'error_log = /var/log/app/php-error.log' >> /usr/local/etc/php/php.ini" || true
-        docker exec {{ app_name }} bash -c "echo 'log_errors = On' >> /usr/local/etc/php/php.ini" || true
-        docker restart {{ app_name }}
-      ignore_errors: yes
-
     - name: Create application log file
       file:
         path: "{{ log_dir }}/application.log"
-        state: touch
-        owner: ec2-user
-        group: ec2-user
-        mode: '0644'
-
-    - name: Create PHP error log file
-      file:
-        path: "{{ log_dir }}/php-error.log"
         state: touch
         owner: ec2-user
         group: ec2-user

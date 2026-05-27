@@ -1,25 +1,18 @@
 CREATE DATABASE IF NOT EXISTS opsdesk CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE opsdesk;
 
-CREATE TABLE IF NOT EXISTS incidents (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  title VARCHAR(180) NOT NULL,
-  service_name VARCHAR(120) NOT NULL,
-  severity ENUM('low', 'medium', 'high', 'critical') NOT NULL DEFAULT 'medium',
-  status ENUM('open', 'investigating', 'resolved') NOT NULL DEFAULT 'open',
-  owner VARCHAR(120) NOT NULL DEFAULT 'Platform Team',
-  description TEXT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  INDEX idx_incidents_status_updated (status, updated_at),
-  INDEX idx_incidents_service (service_name),
-  INDEX idx_incidents_severity (severity)
+CREATE TABLE IF NOT EXISTS products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price DECIMAL(10, 2) NOT NULL,
+  image_label VARCHAR(32) NOT NULL DEFAULT 'TECH'
 ) ENGINE=InnoDB;
 
-INSERT INTO incidents (id, title, service_name, severity, status, owner, description)
+INSERT INTO products (id, name, description, price, image_label)
 VALUES
-  (1, 'CloudWatch log ingestion delayed', 'observability-pipeline', 'medium', 'investigating', 'Platform Team', 'Log delivery lag detected during the last verification window.'),
-  (2, 'RDS connection pool near limit', 'web-rds-layer3', 'high', 'open', 'Database Team', 'Web tier is reporting intermittent connection pressure.'),
-  (3, 'ALB target health recovered', 'public-web-alb', 'low', 'resolved', 'Network Team', 'Target group returned to healthy after container restart.')
-ON DUPLICATE KEY UPDATE title = title;
+  (1, 'Quantum Laptop Pro', 'Portable workstation for fast builds and cloud demos.', 1299.00, 'LAPTOP'),
+  (2, 'Cyber Glasses V2', 'Lightweight AR display for maps, alerts, and quick notes.', 399.50, 'AR'),
+  (3, 'Neural Mouse X', 'Low-latency ergonomic mouse for long engineering sessions.', 79.00, 'MOUSE'),
+  (4, 'Holo Watch', 'Compact watch with health stats and calendar alerts.', 149.00, 'WATCH')
+ON DUPLICATE KEY UPDATE name = VALUES(name);
