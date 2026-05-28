@@ -584,9 +584,9 @@ def _trigger_step_functions(incident_id: str, ai_result: dict) -> list[dict]:
         risk = action.get("risk", "high").lower()
 
         # ── AUTO-EXECUTION BY SEVERITY ──────────────────────────────────
-        # Tự động khắc phục nếu mức độ nghiêm trọng dưới critical (tức là high, medium, low)
+        # Tự động khắc phục nếu mức độ nghiêm trọng dưới high (tức là medium, low)
         severity = ai_result.get("severity", "unknown").lower()
-        auto_execute = (severity != "critical")
+        auto_execute = severity not in ["critical", "high"]
         # ─────────────────────────────────────────────────────────────────
 
         sf_input = {
