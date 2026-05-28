@@ -583,11 +583,10 @@ def _trigger_step_functions(incident_id: str, ai_result: dict) -> list[dict]:
         target = action.get("target", "unknown")
         risk = action.get("risk", "high").lower()
 
-        # ── MANUAL APPROVAL MODE ─────────────────────────────────────────
-        # Tạm thời force tất cả về WaitForApproval để test end-to-end flow.
-        # Khi muốn bật auto-execute: xóa dòng override bên dưới.
-        auto_execute = False
-        # auto_execute = (risk == "low" and action.get("auto_execute") is True)  # bật lại sau
+        # ── AUTO-EXECUTION BY SEVERITY ──────────────────────────────────
+        # Tự động khắc phục nếu mức độ nghiêm trọng dưới critical (tức là high, medium, low)
+        severity = ai_result.get("severity", "unknown").lower()
+        auto_execute = (severity != "critical")
         # ─────────────────────────────────────────────────────────────────
 
         sf_input = {
