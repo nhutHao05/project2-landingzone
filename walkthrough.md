@@ -245,3 +245,186 @@ environments/
   - Khi cuộc gọi Bedrock gặp lỗi, Lambda tự động kích hoạt bộ sinh phân tích cục bộ.
   - Bộ sinh phân tích này tự phân tích tên rule, địa chỉ IP nguồn để ánh xạ sang MITRE ATT&CK, đề xuất hành động ứng phó (ví dụ: block IP) và tạo mã Incident ID hợp lệ.
   - Bản ghi được lưu chính xác vào DynamoDB và gửi tin nhắn cảnh báo thành công qua Telegram.
+
+---
+
+## 9. Phase 6 — AWS Cognito SSO & Step Functions Remediation
+
+### A. Kiến trúc Pipeline Mới
+
+```
+Elastic SIEM Alert (Webhook)
+        │
+        ▼
+[AI Engine Lambda]
+        │ — phân tích Bedrock —► DynamoDB (save incident)
+        │
+        ▼
+[Step Functions State Machine: p2-soar-remediation-workflow]
+        │
+   ① ClassifySeverity
+        ├── auto_execute: true (risk=low)  ──► ② ExecuteRemediation (Lambda)
+        └── auto_execute: false            ──► ③ WaitForApproval (TaskToken, 24h timeout)
+                                                       │
+                                          [Web Portal + Cognito SSO]
+                                          Analyst click Approve/Reject
+                                                       │
+                                               ④ ApprovalRouter
+                                              /              \
+                                        Approved           Rejected
+                                            │                  │
+                                     ⑤ ExecuteAction    ⑥ RecordRejection
+                                            └──────────────────┘
+                                                       │
+                                               ⑦ UpdateDynamoDB
+                                               ⑧ NotifyTelegram
+```
+
+### B. AWS Cognito — SSO cho Web Portal
+
+| Thành phần | Giá trị |
+|---|---|
+| User Pool | `p2-soar-portal-users` |
+| Hosted UI Domain | `p2-soar-portal.auth.ap-southeast-1.amazoncognito.com` |
+| App Client | PKCE (no secret), SPA-compatible |
+| Groups | Admin, Analyst, ReadOnly |
+| Login Flow | Cognito Hosted UI → PKCE code exchange → JWT tokens |
+
+**Terraform file**: [cognito.tf](file:///d:/Project-2-Landing-Zone/environments/monitor-account/cognito.tf)
+
+### C. Step Functions State Machine
+
+| Trạng thái | Loại | Mô tả |
+|---|---|---|
+| ClassifySeverity | Choice | Check `auto_execute` flag |
+| ExecuteRemediation | Task (Lambda) | Auto-execute low-risk actions |
+| WaitForApproval | Task (waitForTaskToken) | Pause chờ analyst approve, timeout 24h |
+| ApprovalRouter | Choice | Route dựa theo quyết định analyst |
+| ExecuteApprovedAction | Task (Lambda) | Thực thi sau khi được approve |
+| RecordRejection | Task (Lambda) | Ghi nhận rejection |
+| HandleTimeout | Task (Lambda) | Xử lý khi quá 24h không có phản hồi |
+
+**Terraform file**: [step-functions.tf](file:///d:/Project-2-Landing-Zone/environments/monitor-account/step-functions.tf)
+
+### D. Lambda Functions Mới
+
+| Lambda | File | Vai trò |
+|---|---|---|
+| `p2-soar-remediation-executor` | `lambda/remediation_executor/index.py` | Thực thi actions + lưu TaskToken vào DynamoDB |
+| `p2-soar-remediation-callback` | `lambda/remediation_callback/index.py` | Nhận Approve/Reject từ Portal → gọi SF SendTaskSuccess/Failure |
+
+### E. API Gateway Endpoints (Cognito-Protected)
+
+| Method | Path | Auth | Lambda |
+|---|---|---|---|
+| POST | `/remediate` | Cognito JWT | `remediation` (legacy) |
+| GET  | `/incidents` | Cognito JWT | `remediation` |
+| POST | `/callback`  | Cognito JWT | `remediation-callback` **[NEW]** |
+| OPTIONS | tất cả | NONE | CORS preflight |
+
+### F. Web Portal Upgrade
+
+| File | Thay đổi |
+|---|---|
+| `index.html` | Xóa mock login form → Cognito SSO button + 4 metric cards |
+| `app.js` | PKCE auth flow, JWT API calls, SF callback, reject button |
+| `callback.html` | **[NEW]** Cognito redirect handler, PKCE token exchange |
+| `styles.css` | SSO button, loading spinner, 4-column metrics |
+| `config.json` | **Auto-generated** — thêm Cognito domain, client_id, callback/logout URLs |
+
+---
+
+## 10. Sơ đồ File Terraform (cập nhật)
+
+```
+environments/monitor-account/
+├── cognito.tf                     ← [NEW] Cognito User Pool + Client + Domain + Groups
+├── step-functions.tf              ← [NEW] SF State Machine + Executor Lambda + Callback Lambda
+├── remediation-api.tf             ← [UPDATED] Cognito Authorizer + /callback endpoint
+├── ai-engine.tf                   ← [UPDATED] SF StartExecution permission + SFN_ARN env var
+├── variables.tf                   ← [UPDATED] Cognito + SF timeout variables
+├── lambda/
+│   ├── remediation_executor/      ← [NEW] Execute actions + save TaskToken
+│   │   └── index.py
+│   └── remediation_callback/      ← [NEW] SendTaskSuccess/Failure callback
+│       └── index.py
+└── lambda/ai_engine/
+    └── handler.py                 ← [UPDATED] _trigger_step_functions()
+
+web-portal/
+├── index.html                     ← [UPDATED] Cognito SSO login + 4 metrics
+├── app.js                         ← [UPDATED] PKCE + JWT + SF callback
+├── callback.html                  ← [NEW] PKCE code exchange handler
+├── styles.css                     ← [UPDATED] SSO button + new badge styles
+└── config.json                    ← [AUTO] Generated by terraform apply
+```
+
+---
+
+## 11. Hướng Dẫn Deploy Phase 6
+
+### Bước 1: Cập nhật tfvars với callback URL thật
+
+```hcl
+# terraform.tfvars
+cognito_domain_prefix = "p2-soar-portal"     # phải globally unique
+
+# Thay <EC2_PUBLIC_IP> bằng IP thật của EC2 web-portal
+cognito_callback_urls = ["http://<EC2_PUBLIC_IP>/callback.html"]
+cognito_logout_urls   = ["http://<EC2_PUBLIC_IP>/index.html"]
+
+sfn_approval_timeout_seconds = 86400  # 24h
+```
+
+> **Tìm EC2 Public IP**: `terraform output web_portal_instance_id` → check trong AWS Console
+
+### Bước 2: Apply Terraform
+
+```bash
+cd environments/monitor-account
+terraform plan   # kiểm tra ~12 resources mới
+terraform apply
+```
+
+**Output quan trọng sau apply:**
+- `cognito_user_pool_id` — dùng để tạo users
+- `cognito_app_client_id` — auto-injected vào `config.json`
+- `sfn_state_machine_arn` — AI Engine sẽ trigger này
+- `callback_api_url` — URL cho SF callback
+
+### Bước 3: Tạo test users trong Cognito
+
+```bash
+# Tạo admin user
+aws cognito-idp admin-create-user \
+  --user-pool-id <USER_POOL_ID> \
+  --username admin@example.com \
+  --user-attributes Name=email,Value=admin@example.com Name=name,Value=Admin \
+  --profile monitor-account
+
+# Gán vào group Admin
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id <USER_POOL_ID> \
+  --username admin@example.com \
+  --group-name Admin \
+  --profile monitor-account
+```
+
+### Bước 4: Deploy web-portal lên EC2
+
+```bash
+# Copy web-portal files lên EC2 qua SSM
+# (config.json đã được auto-generate bởi Terraform với đầy đủ Cognito info)
+ansible-playbook ... # hoặc dùng SSM send-command
+```
+
+### Bước 5: Test end-to-end
+
+1. Truy cập `http://<EC2_PUBLIC_IP>/index.html`
+2. Click **Sign in with Cognito** → redirect Hosted UI
+3. Login bằng admin user đã tạo
+4. Cognito redirect về `callback.html` → exchange tokens
+5. Dashboard hiện ra với JWT-authenticated API calls
+6. Khi có incident mới → AI Engine trigger SF → status = "Pending Approval"
+7. Click Approve → Portal gọi `/callback` → SF resume → thực thi remediation
+

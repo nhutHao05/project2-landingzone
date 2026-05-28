@@ -79,15 +79,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "web_portal_ansible_ssm_temp" {
 resource "aws_security_group" "web_portal" {
   count       = var.enable_web_portal_ec2 ? 1 : 0
   name        = "${var.project_name}-web-portal-sg"
-  description = "Security group for static Web Portal host - SSM access only"
+  description = "Security group for Web Portal EC2 - HTTP public and SSM outbound"
   vpc_id      = data.aws_vpc.default[0].id
+
+  # HTTP inbound — cho phép browser truy cập Web Portal
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP inbound from anywhere (Web Portal public access)"
+  }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow outbound traffic for SSM, Docker package install, and API calls"
+    description = "Allow outbound for SSM, package install, Cognito/API calls"
   }
 
   tags = {
@@ -157,6 +166,39 @@ resource "aws_instance" "web_portal" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     set -euxo pipefail
+
+    # Cài nginx để serve static Web Portal trên port 80
+    dnf install -y nginx
+    systemctl enable --now nginx
+
+    # Tạo thư mục web root và set quyền
+    mkdir -p /var/www/html/portal
+    chown -R ec2-user:ec2-user /var/www/html/portal
+
+    # Cấu hình nginx serve từ /var/www/html/portal
+    cat > /etc/nginx/conf.d/portal.conf <<'NGINX'
+    server {
+        listen 80 default_server;
+        server_name _;
+        root /var/www/html/portal;
+        index index.html;
+
+        # Serve tất cả static files
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # No cache cho config.json (cập nhật sau terraform apply)
+        location = /config.json {
+            add_header Cache-Control "no-store, no-cache";
+        }
+    }
+    NGINX
+
+    # Reload nginx với config mới
+    nginx -t && systemctl reload nginx
+
+    # Giữ docker để phát triển sau này
     dnf install -y docker
     systemctl enable --now docker
     usermod -aG docker ec2-user
@@ -181,7 +223,13 @@ output "web_portal_instance_id" {
   description = "EC2 Instance ID cua static Web Portal trong Monitor Account"
 }
 
+output "web_portal_public_ip" {
+  value       = var.enable_web_portal_ec2 ? aws_instance.web_portal[0].public_ip : null
+  description = "Public IP cua static Web Portal trong Monitor Account"
+}
+
 output "web_portal_ansible_ssm_bucket" {
   value       = var.enable_web_portal_ec2 ? aws_s3_bucket.web_portal_ansible_ssm_temp[0].bucket : null
   description = "S3 bucket dung cho Ansible SSM khi deploy static Web Portal"
 }
+

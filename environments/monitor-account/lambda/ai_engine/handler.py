@@ -51,10 +51,12 @@ BEDROCK_MODEL_ID = os.environ.get(
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+SFN_STATE_MACHINE_ARN = os.environ.get("SFN_STATE_MACHINE_ARN", "")
 
 # ---------- AWS clients ----------
 dynamodb = boto3.resource("dynamodb")
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+sfn_client = boto3.client("stepfunctions") if SFN_STATE_MACHINE_ARN else None
 
 
 # =====================================================
@@ -95,21 +97,15 @@ def lambda_handler(event, context):
         # --- Send Telegram Notification ---
         _send_telegram_alert(incident_id, ai_result, alert_payload)
 
-        # --- Auto-execute safe actions (Phase 4 placeholder) ---
-        auto_actions = [
-            a for a in ai_result.get("remediation_actions", [])
-            if a.get("auto_execute") is True and a.get("risk") == "low"
-        ]
-        if auto_actions:
-            logger.info("Auto-execute actions (placeholder): %s",
-                        [a["action"] for a in auto_actions])
-            # TODO Phase 4: gọi Remediation Lambda
+        # --- Trigger Step Functions Remediation Workflow ---
+        sfn_executions = _trigger_step_functions(incident_id, ai_result)
 
         return _response(200, {
             "status": "ok",
             "incident_id": incident_id,
             "severity": ai_result.get("severity"),
             "confidence": ai_result.get("confidence"),
+            "sfn_executions": sfn_executions,
             "actions_pending_approval": len([
                 a for a in ai_result.get("remediation_actions", [])
                 if not a.get("auto_execute")
@@ -548,6 +544,90 @@ def _send_telegram_alert(incident_id: str, ai_result: dict, alert: dict):
 
     except Exception as e:
         logger.warning("Telegram notification error: %s", e)
+
+
+# =====================================================
+# Step Functions — Trigger Remediation Workflow
+# =====================================================
+def _trigger_step_functions(incident_id: str, ai_result: dict) -> list[dict]:
+    """
+    Khởi tạo Step Functions execution cho mỗi remediation action.
+
+    Hiện tại: auto_execute=False cho TẤT CẢ actions
+    → Mọi incident đều vào WaitForApproval, chờ analyst approve trên Web Portal.
+
+    Để bật auto-execute sau này: xóa dòng `auto_execute = False` override bên dưới,
+    lúc đó risk=low + auto_execute=True từ AI sẽ được thực thi tự động.
+    """
+    if not SFN_STATE_MACHINE_ARN or not sfn_client:
+        logger.info("Step Functions not configured (SFN_STATE_MACHINE_ARN empty), skipping SF trigger")
+        return []
+
+    actions = ai_result.get("remediation_actions", [])
+    if isinstance(actions, str):
+        try:
+            actions = json.loads(actions)
+        except Exception:
+            actions = []
+
+    if not actions:
+        logger.info("No remediation actions to trigger for %s", incident_id)
+        return []
+
+    executions = []
+    for idx, action in enumerate(actions):
+        if not isinstance(action, dict):
+            continue
+
+        action_type = action.get("action", "unknown")
+        target = action.get("target", "unknown")
+        risk = action.get("risk", "high").lower()
+
+        # ── MANUAL APPROVAL MODE ─────────────────────────────────────────
+        # Tạm thời force tất cả về WaitForApproval để test end-to-end flow.
+        # Khi muốn bật auto-execute: xóa dòng override bên dưới.
+        auto_execute = False
+        # auto_execute = (risk == "low" and action.get("auto_execute") is True)  # bật lại sau
+        # ─────────────────────────────────────────────────────────────────
+
+        sf_input = {
+            "incident_id": incident_id,
+            "action_type": action_type,
+            "target": target,
+            "source": ai_result.get("incident_title", "SIEM Alert"),
+            "severity": ai_result.get("severity", "unknown"),
+            "auto_execute": auto_execute,
+        }
+
+        execution_name = f"{incident_id}-{action_type}-{idx}"[:80]
+        # SF execution names: only allow alphanumeric, hyphens, underscores
+        import re as _re
+        execution_name = _re.sub(r"[^a-zA-Z0-9_-]", "-", execution_name)
+
+        try:
+            resp = sfn_client.start_execution(
+                stateMachineArn=SFN_STATE_MACHINE_ARN,
+                name=execution_name,
+                input=json.dumps(sf_input),
+            )
+            exec_arn = resp["executionArn"]
+            logger.info("Started SF execution %s for action %s (auto=%s)",
+                        exec_arn, action_type, auto_execute)
+            executions.append({
+                "execution_arn": exec_arn,
+                "action": action_type,
+                "target": target,
+                "auto_execute": auto_execute,
+            })
+        except Exception as e:
+            logger.error("Failed to start SF execution for action %s: %s", action_type, e)
+            executions.append({
+                "action": action_type,
+                "target": target,
+                "error": str(e),
+            })
+
+    return executions
 
 
 # =====================================================

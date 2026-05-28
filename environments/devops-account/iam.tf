@@ -151,7 +151,10 @@ resource "aws_iam_role" "monitor_remediation_cross_account_role" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.monitor_account_id}:role/${var.monitor_remediation_lambda_role_name}"
+          AWS = [
+            "arn:aws:iam::${var.monitor_account_id}:role/${var.monitor_remediation_lambda_role_name}",
+            "arn:aws:iam::${var.monitor_account_id}:role/p2-soar-remediation-executor-role"
+          ]
         }
         Action = "sts:AssumeRole"
       }
@@ -173,7 +176,11 @@ resource "aws_iam_policy" "monitor_remediation_cross_account_policy" {
           "ec2:DescribeSecurityGroups",
           "ec2:CreateSecurityGroup",
           "ec2:RevokeSecurityGroupEgress",
-          "ec2:ModifyInstanceAttribute"
+          "ec2:ModifyInstanceAttribute",
+          "ec2:DescribeNetworkAcls",
+          "ec2:CreateNetworkAclEntry",
+          "ec2:DeleteNetworkAclEntry",
+          "ec2:DescribeVpcs"
         ]
         Resource = "*"
       },

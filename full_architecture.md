@@ -14,93 +14,125 @@ Multi-Account AWS  →  Đẩy Logs vào Elastic (anh Hưng)  →  AI phân tíc
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  NHÓM MÌNH — AWS LANDING ZONE (3 Accounts đã dựng)                                 │
+│  AWS LANDING ZONE (3 Accounts)                                                      │
 │                                                                                     │
-│  ┌─────────────────┐   ┌─────────────────────┐   ┌──────────────────────┐          │
-│  │ Master Account  │   │ DevOps Account      │   │  Monitor Account     │          │
-│  │                 │   │                     │   │                      │          │
-│  │ - Organizations │   │ 🌐 Web App OpsDesk  │   │ - S3 Bucket (logs)   │          │
-│  │ - IAM Identity  │   │   ALB → EC2 (PHP)   │   │ - SQS Queue          │          │
-│  │   Center (SSO)  │   │   → RDS MySQL       │   │ - IAM User cho       │          │
-│  │ - CloudTrail    │   │ - CloudTrail        │   │   Elastic Agent      │          │
-│  │   (org-level)   │   │ - VPC FlowLogs      │   │ - EC2 Elastic Agent  │          │
-│  └────────┬────────┘   └─────────┬───────────┘   └──────────┬───────────┘          │
-│           │                     │                       │                           │
-│           │   Logs (API calls)  │  Logs (VPC Flow)      │                           │
-│           └─────────────────────┴───────────┐           │                           │
-│                                             ▼           │                           │
-│                                   ┌─────────────────┐   │                           │
-│                                   │  S3 Bucket      │   │                           │
-│                                   │  (Monitor Acct) │   │                           │
-│                                   │  Centralized    │   │                           │
-│                                   │  Logs           │   │                           │
-│                                   └────────┬────────┘   │                           │
-│                                            │            │                           │
-│                                   S3 Event Notification │                           │
-│                                            ▼            │                           │
-│                                   ┌─────────────────┐   │                           │
-│                                   │  SQS Queue      │   │                           │
-│                                   │  (thông báo có  │   │                           │
-│                                   │   file log mới) │   │                           │
-│                                   └────────┬────────┘   │                           │
-│                                            │            │                           │
-│                                     Poll SQS + Đọc S3  │                           │
-│                                            ▼            │                           │
-│                                   ┌─────────────────┐   │                           │
-│                                   │  EC2 Instance   │◄──┘                           │
-│                                   │  Elastic Agent  │                               │
-│                                   │  (t3.micro)     │                               │
-│                                   └────────┬────────┘                               │
-│                                            │                                        │
-└────────────────────────────────────────────┼────────────────────────────────────────┘
-                                             │
-                                   Gửi logs qua HTTPS
-                                   (Fleet protocol)
-                                             │
-                                             ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  HỆ THỐNG ANH HƯNG — ELASTIC SIEM (Dựng sẵn, nhóm mình chỉ XÀI)                  │
-│                                                                                     │
-│  ┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐            │
-│  │  Fleet Server   │ ◄──  │  Elasticsearch   │ ◄──  │  Kibana         │            │
-│  │  (nhận logs từ  │      │  (lưu trữ &      │      │  (UI dashboard  │            │
-│  │   Elastic Agent)│      │   index logs)    │      │   & SIEM rules) │            │
-│  │                 │ ──►  │                  │ ──►  │                 │            │
-│  └─────────────────┘      └──────────────────┘      └─────────────────┘            │
-│                                    │                                                │
-│                           700+ SIEM Rules                                           │
-│                         (Detection & Alerts)                                        │
-│                                                                                     │
-│  URL: elastic.hungcx.cloud                                                          │
-│  Fleet: elastic.hungcx.cloud:8220                                                   │
-│  Kibana: elastic.hungcx.cloud:5601                                                  │
-│                                                                                     │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-                                     │ Alert triggered (webhook)
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  AI ENGINE (AWS Bedrock + Lambda — trong Monitor Account)                           │
-│                                                                                     │
-│   Alert → Lambda → Thu thập context từ ES → Bedrock AI (Claude)                    │
-│                                    │                                                │
-│                          RCA + MITRE ATT&CK                                         │
-│                        + Remediation Suggestions                                    │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-                           │                    │
-               Hiển thị kết quả        Thực thi remediation
-                           │                    │
-                           ▼                    ▼
-┌───────────────────────────┐   ┌──────────────────────────────────────────────────────┐
-│  WEB PORTAL               │   │  AUTOMATED REMEDIATION                               │
-│  (SSO via IAM Identity    │   │                                                      │
-│   Center)                 │   │  Lambda → AWS APIs:                                  │
-│                           │   │  - Revoke IAM credentials                            │
-│  - Dashboard incidents    │   │  - Block IP in Security Group                        │
-│  - AI analysis results    │   │  - Isolate EC2 instance                              │
-│  - Approve / reject       │   │  - Disable compromised user                          │
-│    remediation actions    │   │  - Enable GuardDuty finding response                 │
-│  - Audit history          │   │                                                      │
-└───────────────────────────┘   └──────────────────────────────────────────────────────┘
+│  ┌─────────────────┐   ┌──────────────────────────┐   ┌──────────────────────────┐ │
+│  │ Master Account  │   │ DevOps Account           │   │  Monitor Account         │ │
+│  │ 060026501585    │   │ 884264984854             │   │  247448832458            │ │
+│  │                 │   │                          │   │                          │ │
+│  │ - Organizations │   │ Web App OpsDesk          │   │ S3 Centralized Logs      │ │
+│  │ - SCPs          │   │  ALB → EC2 → RDS MySQL   │   │ SQS Queue                │ │
+│  │ - CloudTrail    │   │                          │   │ EC2 Elastic Agent        │ │
+│  │   (org-level)   │   │ - CloudTrail logs        │   │ EC2 Web Portal (nginx)   │ │
+│  │                 │   │ - VPC Flow Logs          │   │                          │ │
+│  │                 │   │ - ALB Access Logs        │   │ Lambda: AI Engine        │ │
+│  │                 │   │                          │   │ Lambda: Remediation      │ │
+│  │                 │   │ Cross-account Role ◄─────┼───┤   (Executor + Callback)  │ │
+│  │                 │   │ (assumed by Monitor)     │   │                          │ │
+│  │                 │   │                          │   │ Step Functions           │ │
+│  │                 │   │                          │   │ DynamoDB (Incidents)     │ │
+│  │                 │   │                          │   │ API Gateway              │ │
+│  │                 │   │                          │   │ Cognito User Pool        │ │
+│  └────────┬────────┘   └───────────┬──────────────┘   └──────────┬───────────────┘ │
+│           │ All API calls (org)    │ VPC/ALB logs                │                 │
+│           └───────────────────────►│                             │                 │
+│                                    └────────────────────────────►│                 │
+└────────────────────────────────────────────────────────────────────────────────────┘
+         All logs → S3 → SQS → Elastic Agent → Elastic SIEM (elastic.hungcx.cloud)
+```
+
+---
+
+## Luồng SOAR hoàn chỉnh (Phase 6)
+
+```
+① Attacker tấn công hệ thống (VD: Kali scan, brute force, IAM abuse...)
+         │
+         ▼
+② CloudTrail / VPC FlowLogs / ALB Logs ghi lại → S3 (Monitor Account)
+         │
+         ▼
+③ SQS notification → Elastic Agent EC2 poll → gửi lên Elasticsearch
+         │
+         ▼
+④ Kibana SIEM Rules phát hiện pattern nguy hiểm → trigger Alert
+         │  (Webhook → Lambda Function URL)
+         ▼
+⑤ AI Engine Lambda (Monitor Account)
+   ├─ Query Elasticsearch lấy 15 events context
+   ├─ Gọi Amazon Bedrock (Claude Haiku) phân tích
+   │    └─ fallback: local heuristic nếu Bedrock lỗi
+   ├─ Lưu incident vào DynamoDB (status: Pending Approval)
+   ├─ Gửi Telegram alert
+   └─ Trigger Step Functions StartExecution
+         │
+         ▼
+⑥ Step Functions State Machine (p2-soar-remediation-workflow)
+   │
+   ├─ ClassifySeverity
+   │       └─ auto_execute=False (hiện tại) → WaitForApproval
+   │
+   └─ WaitForApproval ⏳
+        Lưu TaskToken vào DynamoDB
+        Pause tại đây, chờ tối đa 24h (không tốn tiền)
+              │
+              │  Analyst vào Web Portal (http://<EC2_IP>/)
+              │  Login bằng Cognito SSO (email + password)
+              │  Thấy incident → click Approve hoặc Reject
+              │
+              ▼
+        API Gateway (POST /callback, Cognito JWT required)
+              │
+              ▼
+        Callback Lambda: lấy TaskToken từ DynamoDB
+        → SendTaskSuccess (approve) hoặc SendTaskFailure (reject)
+              │
+              ▼
+        Step Functions resume:
+         ├─ Approved → ExecuteApprovedAction Lambda
+         │     └─ Assume Role vào DevOps Account
+         │          ├─ block_ip    → WAFv2 IP Set
+         │          ├─ isolate_ec2 → Isolation Security Group
+         │          └─ revoke_creds → Disable IAM Access Key
+         │
+         └─ Rejected → RecordRejection → DynamoDB status=Rejected
+              │
+              ▼
+        NotifyTelegram: "✅ Resolved" hoặc "❌ Rejected"
+        DynamoDB cập nhật trạng thái cuối
+```
+
+---
+
+## Phân quyền Cross-Account (Landing Zone)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  VẤN ĐỀ: Monitor Account cần thực thi actions ở DevOps Account │
+│  (block IP, isolate EC2, revoke IAM key)                        │
+└─────────────────────────────────────────────────────────────────┘
+
+GIẢI PHÁP: IAM Cross-Account AssumeRole
+
+Monitor Account                        DevOps Account
+┌─────────────────────┐                ┌──────────────────────────────┐
+│                     │                │                              │
+│ Remediation Executor│                │ monitor-remediation-role     │
+│ Lambda              │                │  Trust Policy:               │
+│                     │  AssumeRole    │  "Principal": {              │
+│ IAM Role:           │───────────────►│    "AWS": "arn:aws:iam::      │
+│ remediation-executor│                │    247448832458:role/..."    │
+│ -role               │                │  }                           │
+│                     │◄───────────────│                              │
+│                     │  Temp creds    │  Permissions:                │
+│                     │  (15 min)      │  - ec2:ModifyInstanceAttribute│
+│                     │                │  - iam:UpdateAccessKey       │
+│                     │                │  - wafv2:UpdateIPSet         │
+└─────────────────────┘                └──────────────────────────────┘
+
+→ Cognito SSO KHÔNG liên quan đến phân quyền này.
+  Cognito chỉ authenticate analyst vào Web Portal (trang HTML).
+  Phân quyền 3-account được giải quyết bằng IAM AssumeRole.
 ```
 
 ---
@@ -116,7 +148,7 @@ Multi-Account AWS  →  Đẩy Logs vào Elastic (anh Hưng)  →  AI phân tíc
                     │
                     ▼
  ③ Ghi file .json.gz vào S3 Bucket (nằm ở Monitor Account)
-    s3://project2-soar-centralized-logs-{monitor-account-id}/AWSLogs/...
+    s3://p2-soar-centralized-logs-247448832458/AWSLogs/...
                     │
                     ▼
  ④ S3 Event Notification tự động gửi message vào SQS Queue
@@ -145,30 +177,45 @@ Multi-Account AWS  →  Đẩy Logs vào Elastic (anh Hưng)  →  AI phân tíc
     → Webhook → trigger AI Engine (Lambda)
                     │
                     ▼
- ⑨ AI phân tích + Remediation (tự động hoặc chờ approve)
+ ⑨ AI Engine Lambda phân tích (Bedrock Claude Haiku)
+    → Lưu incident vào DynamoDB
+    → Gửi Telegram alert
+    → Trigger Step Functions StartExecution
+                    │
+                    ▼
+ ⑩ Step Functions State Machine
+    → WaitForApproval: lưu TaskToken vào DynamoDB, pause
+    → Analyst login Web Portal (Cognito SSO)
+    → Click Approve → API Gateway /callback → Callback Lambda
+    → SendTaskSuccess → Step Functions resume
+    → Executor Lambda assume role vào DevOps Account
+    → Thực thi: block_ip / isolate_ec2 / revoke_creds
+    → Update DynamoDB: Resolved
+    → Telegram: "✅ Action executed"
 ```
 
 ---
 
-## Phân chia trách nhiệm rõ ràng
+## Phân chia trách nhiệm
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    NHÓM MÌNH LÀM                                │
+│                    NHÓM MÌNH ĐÃ LÀM                             │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ✅ Dựng AWS Landing Zone (3 accounts + Organizations)           │
 │  ✅ Cấu hình CloudTrail org-level → ghi vào S3                  │
 │  ✅ Tạo S3 Bucket centralized logs (Monitor Account)             │
 │  ✅ Tạo SQS Queue + S3 Event Notification                       │
-│  ✅ Tạo IAM User (access key) cho Elastic Agent                 │
-│  ✅ Deploy EC2 + cài Elastic Agent (enroll vào Fleet anh Hưng)  │
-│  ✅ Cấu hình AWS Integration trên Kibana (CloudTrail input)     │
-│  ✅ Web App OpsDesk (PHP) + ALB + RDS MySQL (DevOps Account)    │
-│  ✅ CloudTrail + VPC FlowLogs (DevOps Account)                  │
-│  🔜 AI Engine (Lambda + Bedrock)                                │
-│  🔜 Web Portal (SSO Dashboard)                                  │
-│  🔜 Automated Remediation (Lambda actions)                      │
+│  ✅ Deploy EC2 Elastic Agent (Monitor Account)                   │
+│  ✅ Web App OpsDesk (Next.js) + ALB + RDS MySQL (DevOps)         │
+│  ✅ CloudTrail + VPC FlowLogs + ALB Logs (DevOps Account)        │
+│  ✅ AI Engine Lambda (Bedrock Claude + fallback heuristic)       │
+│  ✅ Telegram Security Alerts                                     │
+│  ✅ Step Functions Remediation Workflow (human-in-the-loop)      │
+│  ✅ Web Portal EC2 (nginx, static HTML)                         │
+│  ✅ Cognito SSO (PKCE, Hosted UI, User Pool)                    │
+│  ✅ Cross-account Remediation (AssumeRole DevOps Account)        │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 

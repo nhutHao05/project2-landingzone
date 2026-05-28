@@ -140,15 +140,10 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Sid    = "AllowAlbAccessLogsWrite"
         Effect = "Allow"
         Principal = {
-          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+          AWS = "arn:aws:iam::114774131450:root"
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.centralized_logs.arn}/alb-logs/*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = [var.devops_account_id, var.master_account_id]
-          }
-        }
       }
     ]
   })

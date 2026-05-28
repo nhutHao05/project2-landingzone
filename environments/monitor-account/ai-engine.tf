@@ -56,6 +56,15 @@ resource "aws_iam_policy" "ai_engine_policy" {
         ]
         Effect   = "Allow"
         Resource = "*"
+      },
+      {
+        # Step Functions — trigger remediation workflow
+        Sid    = "AllowStepFunctionsStart"
+        Action = [
+          "states:StartExecution"
+        ]
+        Effect   = "Allow"
+        Resource = aws_sfn_state_machine.remediation.arn
       }
     ]
   })
@@ -86,15 +95,16 @@ resource "aws_lambda_function" "ai_engine" {
 
   environment {
     variables = {
-      ES_URL             = var.elasticsearch_url
-      ES_USERNAME        = var.elasticsearch_username
-      ES_PASSWORD        = var.elasticsearch_password
-      ES_VERIFY_SSL      = "false"
-      DYNAMODB_TABLE     = aws_dynamodb_table.incidents.name
-      BEDROCK_REGION     = var.bedrock_region
-      BEDROCK_MODEL_ID   = var.bedrock_model_id
-      TELEGRAM_BOT_TOKEN = var.telegram_bot_token
-      TELEGRAM_CHAT_ID   = var.telegram_chat_id
+      ES_URL                = var.elasticsearch_url
+      ES_USERNAME           = var.elasticsearch_username
+      ES_PASSWORD           = var.elasticsearch_password
+      ES_VERIFY_SSL         = "false"
+      DYNAMODB_TABLE        = aws_dynamodb_table.incidents.name
+      BEDROCK_REGION        = var.bedrock_region
+      BEDROCK_MODEL_ID      = var.bedrock_model_id
+      TELEGRAM_BOT_TOKEN    = var.telegram_bot_token
+      TELEGRAM_CHAT_ID      = var.telegram_chat_id
+      SFN_STATE_MACHINE_ARN = aws_sfn_state_machine.remediation.arn
     }
   }
 

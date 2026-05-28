@@ -145,3 +145,33 @@ variable "devops_region_short" {
   description = "Region short name cua DevOps account dung de tinh default remediation role ARN"
   default     = "apse1"
 }
+
+# ==========================================
+# Phase 6 Variables — Cognito SSO
+# ==========================================
+variable "cognito_domain_prefix" {
+  type        = string
+  description = "Prefix cho Cognito Hosted UI domain (VD: p2-soar-portal → p2-soar-portal.auth.ap-southeast-1.amazoncognito.com)"
+  default     = "p2-soar-portal"
+}
+
+variable "cognito_callback_urls" {
+  type        = list(string)
+  description = "Callback URLs cho Cognito OAuth2 (public URL cua Web Portal EC2)"
+  default     = ["http://localhost:8080/callback.html"]
+}
+
+variable "cognito_logout_urls" {
+  type        = list(string)
+  description = "Logout URLs cho Cognito OAuth2"
+  default     = ["http://localhost:8080/index.html"]
+}
+
+# ==========================================
+# Phase 6 Variables — Step Functions
+# ==========================================
+variable "sfn_approval_timeout_seconds" {
+  type        = number
+  description = "Thoi gian toi da cho phep analyst phe duyet incident truoc khi timeout (giay). Default: 86400 = 24h."
+  default     = 86400
+}

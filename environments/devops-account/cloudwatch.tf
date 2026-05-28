@@ -28,69 +28,20 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   }
 }
 
-# ── Web Tier Log Groups ─────────────────────────────────────
+# ── Web App Log Groups ─────────────────────────────────────
 
-# Web Tier - System Logs (messages, secure)
-resource "aws_cloudwatch_log_group" "web_system" {
-  name              = "/aws/ec2/web-tier/system"
-  retention_in_days = 7
+# Web App - Application Logs
+resource "aws_cloudwatch_log_group" "web_app_logs" {
+  name              = "/aws/ec2/web-app/logs"
+  retention_in_days = 14
 
   tags = {
-    Name        = "${local.name_prefix}-web-system-logs"
+    Name        = "${local.name_prefix}-web-app-logs"
     Environment = var.env
     ManagedBy   = "Terraform"
   }
 }
 
-# Web Tier - HTTP Server Logs (Apache/Nginx)
-resource "aws_cloudwatch_log_group" "web_httpd" {
-  name              = "/aws/ec2/web-tier/httpd"
-  retention_in_days = 7
-
-  tags = {
-    Name        = "${local.name_prefix}-web-httpd-logs"
-    Environment = var.env
-    ManagedBy   = "Terraform"
-  }
-}
-
-# Web Tier - PHP Application Logs
-resource "aws_cloudwatch_log_group" "web_application" {
-  name              = "/aws/ec2/web-tier/application"
-  retention_in_days = 14 # Business logs need longer retention
-
-  tags = {
-    Name        = "${local.name_prefix}-web-application-logs"
-    Environment = var.env
-    ManagedBy   = "Terraform"
-  }
-}
-
-# ── App Tier Log Groups ─────────────────────────────────────
-
-# App Tier - System Logs
-resource "aws_cloudwatch_log_group" "app_system" {
-  name              = "/aws/ec2/app-tier/system"
-  retention_in_days = 7
-
-  tags = {
-    Name        = "${local.name_prefix}-app-system-logs"
-    Environment = var.env
-    ManagedBy   = "Terraform"
-  }
-}
-
-# App Tier - Streamlit Application Logs
-resource "aws_cloudwatch_log_group" "app_streamlit" {
-  name              = "/aws/ec2/app-tier/streamlit"
-  retention_in_days = 7
-
-  tags = {
-    Name        = "${local.name_prefix}-app-streamlit-logs"
-    Environment = var.env
-    ManagedBy   = "Terraform"
-  }
-}
 
 # ── Database Log Groups ─────────────────────────────────────
 
@@ -195,18 +146,9 @@ resource "aws_iam_policy" "cloudwatch_agent_policy" {
           "logs:DescribeLogStreams"
         ]
         Resource = [
-          # Web tier log groups
-          aws_cloudwatch_log_group.web_system.arn,
-          "${aws_cloudwatch_log_group.web_system.arn}:*",
-          aws_cloudwatch_log_group.web_httpd.arn,
-          "${aws_cloudwatch_log_group.web_httpd.arn}:*",
-          aws_cloudwatch_log_group.web_application.arn,
-          "${aws_cloudwatch_log_group.web_application.arn}:*",
-          # App tier log groups
-          aws_cloudwatch_log_group.app_system.arn,
-          "${aws_cloudwatch_log_group.app_system.arn}:*",
-          aws_cloudwatch_log_group.app_streamlit.arn,
-          "${aws_cloudwatch_log_group.app_streamlit.arn}:*",
+          # Web app log groups
+          aws_cloudwatch_log_group.web_app_logs.arn,
+          "${aws_cloudwatch_log_group.web_app_logs.arn}:*",
           # Infrastructure log groups
           aws_cloudwatch_log_group.vpc_flow_logs.arn,
           "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
@@ -266,14 +208,9 @@ output "cloudwatch_log_groups" {
     vpc_flow_logs = aws_cloudwatch_log_group.vpc_flow_logs.name
     cloudtrail    = aws_cloudwatch_log_group.cloudtrail.name
 
-    # Web Tier
-    web_system      = aws_cloudwatch_log_group.web_system.name
-    web_httpd       = aws_cloudwatch_log_group.web_httpd.name
-    web_application = aws_cloudwatch_log_group.web_application.name
+    # Web App
+    web_app_logs = aws_cloudwatch_log_group.web_app_logs.name
 
-    # App Tier
-    app_system    = aws_cloudwatch_log_group.app_system.name
-    app_streamlit = aws_cloudwatch_log_group.app_streamlit.name
 
     # Database
     rds_error     = aws_cloudwatch_log_group.rds_error.name

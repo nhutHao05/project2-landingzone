@@ -9,30 +9,30 @@
         "collect_list": [
           {
             "file_path": "/var/log/messages",
-            "log_group_name": "/aws/ec2/web-tier/system",
+            "log_group_name": "/aws/ec2/web-app/logs",
             "log_stream_name": "{instance_id}/messages",
-            "retention_in_days": 7,
+            "retention_in_days": 14,
             "timezone": "UTC"
           },
           {
             "file_path": "/var/log/secure",
-            "log_group_name": "/aws/ec2/web-tier/system",
+            "log_group_name": "/aws/ec2/web-app/logs",
             "log_stream_name": "{instance_id}/secure",
-            "retention_in_days": 7,
+            "retention_in_days": 14,
             "timezone": "UTC"
           },
           {
             "file_path": "/var/log/app/application.log",
-            "log_group_name": "/aws/ec2/web-tier/application",
+            "log_group_name": "/aws/ec2/web-app/logs",
             "log_stream_name": "{instance_id}/application",
             "retention_in_days": 14,
             "timezone": "UTC"
           },
           {
             "file_path": "/var/lib/docker/containers/*/*.log",
-            "log_group_name": "/aws/ec2/web-tier/container",
+            "log_group_name": "/aws/ec2/web-app/logs",
             "log_stream_name": "{instance_id}/cybermart",
-            "retention_in_days": 7,
+            "retention_in_days": 14,
             "timezone": "UTC"
           }
         ]
