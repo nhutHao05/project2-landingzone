@@ -215,8 +215,8 @@ def save_incident(raw):
     return incident
 
 
-def list_incidents(limit=50):
-    response_data = table.scan(Limit=200)
+def list_incidents(limit=500):
+    response_data = table.scan()
     items = response_data.get("Items", [])
     items.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
     return [public_incident(item) for item in items[:limit]]
