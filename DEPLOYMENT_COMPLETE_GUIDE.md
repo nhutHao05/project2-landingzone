@@ -19,12 +19,12 @@ Sau khi chạy xong kịch bản tự động, bạn sẽ có các thành phần
 - **Truy cập**: Qua Load Balancer (ALB).
 - **Tính năng**: Ứng dụng quản lý nhân sự/vận hành (PHP) giao tiếp với RDS Database kín.
 
-### **Layer 2 - SOAR Web Portal** (Private Access)
+### **Layer 2 - SOAR Web Portal & AI Engine** (Monitor Account)
 - **Truy cập**: Thông qua AWS SSM Port Forwarding.
-- **Tính năng**: Trạm điều khiển AI trung tâm, giám sát sự cố (Incidents) và ra lệnh khắc phục tự động.
+- **Tính năng**: Trạm điều khiển trung tâm (Step Functions, API Gateway, Lambda) giám sát sự cố (Incidents) và ra lệnh khắc phục tự động.
 
-### **Layer 3 - Security Automation** (DevOps Account)
-- **Tính năng**: Remediation Lambda, API Gateway, CloudTrail, CloudWatch Logs. Khi phát hiện Hacker, AI sẽ tự động cô lập máy chủ hoặc khóa IAM Account.
+### **Layer 3 - Security Workloads** (DevOps Account)
+- **Tính năng**: Chứa các resource cần bảo vệ và theo dõi (Inspector, GuardDuty). Khi phát hiện Hacker, AI ở Monitor Account sẽ gọi qua (AssumeRole) để tự động cô lập máy chủ hoặc khóa IAM Account.
 
 ---
 
