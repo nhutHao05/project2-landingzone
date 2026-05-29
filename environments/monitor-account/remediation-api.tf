@@ -58,12 +58,6 @@ resource "aws_iam_role_policy" "remediation_lambda" {
         Resource = aws_dynamodb_table.incidents.arn
       },
       {
-        Sid      = "AllowDevOpsRemediationAssumeRole"
-        Effect   = "Allow"
-        Action   = "sts:AssumeRole"
-        Resource = local.effective_devops_remediation_role_arn
-      },
-      {
         Sid    = "AllowStepFunctionsStart"
         Effect = "Allow"
         Action = "states:StartExecution"
@@ -85,7 +79,6 @@ resource "aws_lambda_function" "remediation" {
   environment {
     variables = {
       DYNAMODB_TABLE              = aws_dynamodb_table.incidents.name
-      DEVOPS_REMEDIATION_ROLE_ARN = local.effective_devops_remediation_role_arn
       SFN_STATE_MACHINE_ARN       = aws_sfn_state_machine.remediation.arn
     }
   }
@@ -118,48 +111,6 @@ resource "aws_api_gateway_authorizer" "cognito" {
   provider_arns = [
     aws_cognito_user_pool.portal.arn
   ]
-}
-
-# ==========================================
-# Resource: /remediate (POST + OPTIONS)
-# ==========================================
-resource "aws_api_gateway_resource" "remediate" {
-  rest_api_id = aws_api_gateway_rest_api.remediation.id
-  parent_id   = aws_api_gateway_rest_api.remediation.root_resource_id
-  path_part   = "remediate"
-}
-
-resource "aws_api_gateway_method" "remediate_options" {
-  rest_api_id   = aws_api_gateway_rest_api.remediation.id
-  resource_id   = aws_api_gateway_resource.remediate.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_method" "remediate_post" {
-  rest_api_id   = aws_api_gateway_rest_api.remediation.id
-  resource_id   = aws_api_gateway_resource.remediate.id
-  http_method   = "POST"
-  authorization = "COGNITO_USER_POOLS"
-  authorizer_id = aws_api_gateway_authorizer.cognito.id
-}
-
-resource "aws_api_gateway_integration" "remediate_options" {
-  rest_api_id             = aws_api_gateway_rest_api.remediation.id
-  resource_id             = aws_api_gateway_resource.remediate.id
-  http_method             = aws_api_gateway_method.remediate_options.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.remediation.invoke_arn
-}
-
-resource "aws_api_gateway_integration" "remediate_post" {
-  rest_api_id             = aws_api_gateway_rest_api.remediation.id
-  resource_id             = aws_api_gateway_resource.remediate.id
-  http_method             = aws_api_gateway_method.remediate_post.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.remediation.invoke_arn
 }
 
 # ==========================================
@@ -312,8 +263,6 @@ resource "aws_lambda_permission" "callback_apigw" {
 # ==========================================
 resource "aws_api_gateway_deployment" "remediation" {
   depends_on = [
-    aws_api_gateway_integration.remediate_options,
-    aws_api_gateway_integration.remediate_post,
     aws_api_gateway_integration.incidents_options,
     aws_api_gateway_integration.incidents_get,
     aws_api_gateway_integration.callback_options,
@@ -324,20 +273,15 @@ resource "aws_api_gateway_deployment" "remediation" {
 
   triggers = {
     redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.remediate.id,
       aws_api_gateway_resource.incidents.id,
       aws_api_gateway_resource.callback.id,
       aws_api_gateway_resource.retry.id,
-      aws_api_gateway_method.remediate_options.id,
-      aws_api_gateway_method.remediate_post.id,
       aws_api_gateway_method.incidents_options.id,
       aws_api_gateway_method.incidents_get.id,
       aws_api_gateway_method.callback_options.id,
       aws_api_gateway_method.callback_post.id,
       aws_api_gateway_method.retry_options.id,
       aws_api_gateway_method.retry_post.id,
-      aws_api_gateway_integration.remediate_options.id,
-      aws_api_gateway_integration.remediate_post.id,
       aws_api_gateway_integration.incidents_options.id,
       aws_api_gateway_integration.incidents_get.id,
       aws_api_gateway_integration.callback_options.id,
@@ -364,7 +308,6 @@ resource "aws_api_gateway_stage" "remediation" {
 # ==========================================
 resource "local_file" "web_portal_config" {
   content = jsonencode({
-    API_GATEWAY_URL   = "${aws_api_gateway_stage.remediation.invoke_url}/remediate"
     INCIDENTS_API_URL = "${aws_api_gateway_stage.remediation.invoke_url}/incidents"
     CALLBACK_API_URL  = "${aws_api_gateway_stage.remediation.invoke_url}/callback"
     RETRY_API_URL     = "${aws_api_gateway_stage.remediation.invoke_url}/retry"
@@ -379,11 +322,6 @@ resource "local_file" "web_portal_config" {
 # ==========================================
 # Outputs
 # ==========================================
-output "remediation_api_url" {
-  value       = "${aws_api_gateway_stage.remediation.invoke_url}/remediate"
-  description = "Exact URL used by Web Portal approve/reject calls"
-}
-
 output "incidents_api_url" {
   value       = "${aws_api_gateway_stage.remediation.invoke_url}/incidents"
   description = "Exact URL used by Web Portal incident list calls"

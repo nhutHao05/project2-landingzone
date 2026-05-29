@@ -242,17 +242,17 @@ def block_ip(ip_address, ec2_client):
     if not ip_address or ip_address == "unknown":
         return {"error": "Invalid IP address"}
 
-    # 1. Find VPC ID from ALB Security Group
-    sgs = ec2_client.describe_security_groups(
-        Filters=[{'Name': 'group-name', 'Values': ['p2-soar-dev-apse1-sg-alb']}]
+    # 1. Find VPC ID dynamically
+    vpcs = ec2_client.describe_vpcs(
+        Filters=[{'Name': 'tag:ManagedBy', 'Values': ['Terraform']}]
     )
-    if not sgs['SecurityGroups']:
+    if not vpcs['Vpcs']:
         vpcs = ec2_client.describe_vpcs()
-        if not vpcs['Vpcs']:
-            raise RuntimeError("No VPC found in target account")
-        vpc_id = vpcs['Vpcs'][0]['VpcId']
-    else:
-        vpc_id = sgs['SecurityGroups'][0]['VpcId']
+        
+    if not vpcs['Vpcs']:
+        raise RuntimeError("No VPC found in target account")
+        
+    vpc_id = vpcs['Vpcs'][0]['VpcId']
 
     # 2. Get Network ACL for this VPC
     nacls = ec2_client.describe_network_acls(
