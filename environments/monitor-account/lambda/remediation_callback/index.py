@@ -89,10 +89,11 @@ def lambda_handler(event, context):
         # Clear task_token from DynamoDB (prevent duplicate callbacks)
         table.update_item(
             Key={"incident_id": incident_id},
-            UpdateExpression="REMOVE task_token SET updated_at = :t, decided_by = :d",
+            UpdateExpression="REMOVE task_token SET updated_at = :t, decided_by = :d, decision = :dec, decided_at = :t",
             ExpressionAttributeValues={
                 ":t": utc_now(),
                 ":d": approved_by,
+                ":dec": decision,
             },
         )
 

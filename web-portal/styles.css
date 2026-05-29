@@ -439,6 +439,80 @@ tr:hover td {
 /* ── Extra badge colours ─────────────────────────────── */
 .badge.rejected  { background: rgba(239, 68, 68, 0.12); color: var(--danger); }
 .badge.timed_out { background: rgba(156, 163, 175, 0.15); color: var(--text-muted); }
+.badge.error { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+/* ── Retry Button ────────────────────────────────────── */
+.btn-retry {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    animation: pulseOrange 2s infinite;
+}
+
+.btn-retry:hover {
+    background: rgba(245, 158, 11, 0.25);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+    animation: none;
+}
+
+@keyframes pulseOrange {
+    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* ── Tooltip ─────────────────────────────────────────── */
+.tooltip-container {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 250px;
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+    text-align: left;
+    border-radius: 8px;
+    padding: 10px;
+    position: absolute;
+    z-index: 100;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    border: 1px solid var(--danger);
+    font-size: 0.8rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    word-wrap: break-word;
+}
+
+.tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--danger) transparent transparent transparent;
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
 
 /* ── Responsive: collapse metrics to 2 cols on smaller screens ── */
 @media (max-width: 1100px) {

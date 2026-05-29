@@ -83,3 +83,38 @@ variable "monitor_remediation_lambda_role_name" {
   description = "Ten IAM role cua Monitor remediation Lambda duoc phep assume role remediate ben DevOps"
   default     = "p2-soar-remediation-lambda-role"
 }
+
+variable "monitor_inspector_findings_queue_arn" {
+  type        = string
+  description = "Optional override for the Monitor account SQS queue ARN used as the EventBridge target for Amazon Inspector findings. Leave empty to read from monitor-account remote state."
+  default     = ""
+
+  validation {
+    condition     = var.monitor_inspector_findings_queue_arn == "" || can(regex("^arn:aws:sqs:[a-z0-9-]+:[0-9]{12}:.+", var.monitor_inspector_findings_queue_arn))
+    error_message = "monitor_inspector_findings_queue_arn must be empty or a valid SQS queue ARN."
+  }
+}
+
+variable "enable_inspector_ec2_scanning" {
+  type        = bool
+  description = "Enable Amazon Inspector EC2 scanning in the DevOps workload account."
+  default     = true
+}
+
+variable "monitor_tfstate_bucket" {
+  type        = string
+  description = "S3 bucket that stores the monitor-account Terraform state."
+  default     = "p1-bootstrap-apse1-tfstate"
+}
+
+variable "monitor_tfstate_key" {
+  type        = string
+  description = "S3 key for the monitor-account Terraform state."
+  default     = "landing-zone/monitor-account/terraform.tfstate"
+}
+
+variable "monitor_tfstate_region" {
+  type        = string
+  description = "AWS region for the monitor-account Terraform state bucket."
+  default     = "ap-southeast-1"
+}

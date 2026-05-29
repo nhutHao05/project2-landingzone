@@ -11,6 +11,7 @@ let CFG = {
     API_GATEWAY_URL:    '',
     INCIDENTS_API_URL:  '',
     CALLBACK_API_URL:   '',
+    RETRY_API_URL:      '',
     COGNITO_DOMAIN:     '',
     COGNITO_CLIENT_ID:  '',
     COGNITO_REDIRECT_URI: '',
@@ -278,7 +279,14 @@ function normalizeIncident(inc) {
         target:    inc.target || inc.source_ip || inc.destination_ip || 'unknown',
         status:    status.toLowerCase().replace(/\s+/g, '_'),
         timestamp: inc.timestamp || inc.updated_at || '',
-        hasToken:  !!inc.task_token,  // has SF TaskToken = waiting in SF
+        hasToken:  inc.has_pending_approval || !!inc.task_token,
+        decidedBy: inc.decided_by,
+        decidedAt: inc.decided_at,
+        retriedBy: inc.retried_by,
+        errorSummary: inc.error_summary,
+        errorDetail: inc.error_detail,
+        retryCount: inc.retry_count || 0,
+        retryable: inc.retryable || false
     };
 }
 
@@ -328,9 +336,11 @@ function renderTable() {
         if (inc.status === 'resolved')      { statusClass = 'resolved';  statusText = 'Resolved'; }
         else if (inc.status === 'rejected') { statusClass = 'rejected';  statusText = 'Rejected'; }
         else if (inc.status === 'timed_out'){ statusClass = 'rejected';  statusText = 'Timed Out'; }
+        else if (inc.status === 'error')    { statusClass = 'error';     statusText = 'Error'; }
 
         const isPending  = inc.status === 'pending_approval';
         const isDone     = ['resolved', 'rejected', 'timed_out'].includes(inc.status);
+        const isError    = inc.status === 'error';
 
         let approvalHTML = '';
         if (isPending) {
@@ -343,8 +353,36 @@ function renderTable() {
             approvalHTML = `<span style="color:var(--danger); font-size:0.85rem;">❌ Rejected</span>`;
         } else if (isDone) {
             approvalHTML = `<span style="color:var(--accent); font-size:0.85rem;">✅ Done</span>`;
+        } else if (isError && inc.retryable) {
+            approvalHTML = `<button class="btn-retry retry-trigger" data-id="${escapeHtml(inc.id)}">↻ Retry</button>`;
         } else {
             approvalHTML = `<span style="color:var(--text-muted); font-size:0.85rem;">–</span>`;
+        }
+
+        let auditHTML = `<span style="color:var(--text-muted); font-size:0.8rem;">–</span>`;
+        if (inc.decidedBy) {
+            const timeStr = inc.decidedAt ? new Date(inc.decidedAt).toLocaleString() : '';
+            auditHTML = `<div style="font-size:0.8rem; line-height:1.4;">
+                <span style="color:var(--text-main); font-weight:600;">${escapeHtml(inc.decidedBy)}</span><br>
+                <span style="color:var(--text-muted);">${escapeHtml(timeStr)}</span>
+            </div>`;
+        } else if (inc.retriedBy) {
+            auditHTML = `<div style="font-size:0.8rem; line-height:1.4;">
+                <span style="color:var(--warning);">Retried by:</span><br>
+                <span style="color:var(--text-main); font-weight:600;">${escapeHtml(inc.retriedBy)}</span>
+            </div>`;
+        }
+
+        let statusDisplay = `<span class="badge ${statusClass}">${statusText}</span>`;
+        if (isError && inc.errorSummary) {
+            statusDisplay += `
+                <div class="tooltip-container">
+                    ⚠️
+                    <span class="tooltip-text">
+                        <strong>${escapeHtml(inc.errorSummary)}</strong><br>
+                        ${escapeHtml(inc.errorDetail)}
+                    </span>
+                </div>`;
         }
 
         tr.innerHTML = `
@@ -353,7 +391,8 @@ function renderTable() {
             <td style="max-width:280px; word-break:break-word;">${escapeHtml(inc.summary)}</td>
             <td><code>${escapeHtml(inc.action)}</code></td>
             <td><code style="font-size:0.8rem;">${escapeHtml(inc.target)}</code></td>
-            <td><span class="badge ${statusClass}">${statusText}</span></td>
+            <td>${statusDisplay}</td>
+            <td>${auditHTML}</td>
             <td>${approvalHTML}</td>`;
         tbody.appendChild(tr);
     });
@@ -374,6 +413,8 @@ function renderTable() {
         btn.addEventListener('click', e => openModal(e.target.dataset.id, 'approve')));
     document.querySelectorAll('.reject-trigger').forEach(btn =>
         btn.addEventListener('click', e => openModal(e.target.dataset.id, 'reject')));
+    document.querySelectorAll('.retry-trigger').forEach(btn =>
+        btn.addEventListener('click', e => handleRetry(e.target.dataset.id)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -510,6 +551,26 @@ async function legacyRemediate(decision) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'API Error');
     showToast(`Success: ${data.message || 'Action executed'}`);
+}
+
+async function handleRetry(incidentId) {
+    if (!CFG.RETRY_API_URL) {
+        showToast('No Retry API configured.', true);
+        return;
+    }
+    showToast(`Retrying incident ${incidentId}...`);
+    try {
+        const res = await apiFetch(CFG.RETRY_API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ incident_id: incidentId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'API Error');
+        showToast(`✅ ${data.message}`);
+        await fetchIncidents({ silent: true });
+    } catch (err) {
+        showToast(`❌ Retry Failed: ${err.message}`, true);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

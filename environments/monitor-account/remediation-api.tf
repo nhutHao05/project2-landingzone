@@ -62,6 +62,12 @@ resource "aws_iam_role_policy" "remediation_lambda" {
         Effect   = "Allow"
         Action   = "sts:AssumeRole"
         Resource = local.effective_devops_remediation_role_arn
+      },
+      {
+        Sid    = "AllowStepFunctionsStart"
+        Effect = "Allow"
+        Action = "states:StartExecution"
+        Resource = aws_sfn_state_machine.remediation.arn
       }
     ]
   })
@@ -80,6 +86,7 @@ resource "aws_lambda_function" "remediation" {
     variables = {
       DYNAMODB_TABLE              = aws_dynamodb_table.incidents.name
       DEVOPS_REMEDIATION_ROLE_ARN = local.effective_devops_remediation_role_arn
+      SFN_STATE_MACHINE_ARN       = aws_sfn_state_machine.remediation.arn
     }
   }
 
@@ -150,6 +157,48 @@ resource "aws_api_gateway_integration" "remediate_post" {
   rest_api_id             = aws_api_gateway_rest_api.remediation.id
   resource_id             = aws_api_gateway_resource.remediate.id
   http_method             = aws_api_gateway_method.remediate_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.remediation.invoke_arn
+}
+
+# ==========================================
+# Resource: /retry (POST + OPTIONS)
+# ==========================================
+resource "aws_api_gateway_resource" "retry" {
+  rest_api_id = aws_api_gateway_rest_api.remediation.id
+  parent_id   = aws_api_gateway_rest_api.remediation.root_resource_id
+  path_part   = "retry"
+}
+
+resource "aws_api_gateway_method" "retry_options" {
+  rest_api_id   = aws_api_gateway_rest_api.remediation.id
+  resource_id   = aws_api_gateway_resource.retry.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_method" "retry_post" {
+  rest_api_id   = aws_api_gateway_rest_api.remediation.id
+  resource_id   = aws_api_gateway_resource.retry.id
+  http_method   = "POST"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "retry_options" {
+  rest_api_id             = aws_api_gateway_rest_api.remediation.id
+  resource_id             = aws_api_gateway_resource.retry.id
+  http_method             = aws_api_gateway_method.retry_options.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.remediation.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "retry_post" {
+  rest_api_id             = aws_api_gateway_rest_api.remediation.id
+  resource_id             = aws_api_gateway_resource.retry.id
+  http_method             = aws_api_gateway_method.retry_post.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.remediation.invoke_arn
@@ -278,18 +327,23 @@ resource "aws_api_gateway_deployment" "remediation" {
       aws_api_gateway_resource.remediate.id,
       aws_api_gateway_resource.incidents.id,
       aws_api_gateway_resource.callback.id,
+      aws_api_gateway_resource.retry.id,
       aws_api_gateway_method.remediate_options.id,
       aws_api_gateway_method.remediate_post.id,
       aws_api_gateway_method.incidents_options.id,
       aws_api_gateway_method.incidents_get.id,
       aws_api_gateway_method.callback_options.id,
       aws_api_gateway_method.callback_post.id,
+      aws_api_gateway_method.retry_options.id,
+      aws_api_gateway_method.retry_post.id,
       aws_api_gateway_integration.remediate_options.id,
       aws_api_gateway_integration.remediate_post.id,
       aws_api_gateway_integration.incidents_options.id,
       aws_api_gateway_integration.incidents_get.id,
       aws_api_gateway_integration.callback_options.id,
       aws_api_gateway_integration.callback_post.id,
+      aws_api_gateway_integration.retry_options.id,
+      aws_api_gateway_integration.retry_post.id,
       aws_api_gateway_authorizer.cognito.id
     ]))
   }
@@ -313,6 +367,7 @@ resource "local_file" "web_portal_config" {
     API_GATEWAY_URL   = "${aws_api_gateway_stage.remediation.invoke_url}/remediate"
     INCIDENTS_API_URL = "${aws_api_gateway_stage.remediation.invoke_url}/incidents"
     CALLBACK_API_URL  = "${aws_api_gateway_stage.remediation.invoke_url}/callback"
+    RETRY_API_URL     = "${aws_api_gateway_stage.remediation.invoke_url}/retry"
     COGNITO_DOMAIN    = "https://${var.cognito_domain_prefix}.auth.${var.aws_region}.amazoncognito.com"
     COGNITO_CLIENT_ID = aws_cognito_user_pool_client.portal_spa.id
     COGNITO_REDIRECT_URI = var.cognito_callback_urls[0]

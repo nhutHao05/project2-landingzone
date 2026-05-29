@@ -193,6 +193,9 @@ def _collect_context_logs(alert: dict) -> list[dict]:
             "network.transport", "http.request.method", "url.path",
             "http.response.status_code", "mysql.slowlog.query",
             "mysql.slowlog.query_time.sec",
+            "vulnerability.id", "vulnerability.severity", "vulnerability.package.name",
+            "vulnerability.package.version", "aws.inspector.resource.id",
+            "aws.inspector.finding.remediation.recommendation.text"
         ],
     }
 
@@ -221,7 +224,8 @@ def _collect_context_logs(alert: dict) -> list[dict]:
         "logs-*apache*,"
         "logs-*alb*,"
         "logs-*mysql*,"
-        "logs-*rds*"
+        "logs-*rds*,"
+        "logs-*inspector*"
     )
 
     url = f"{ES_URL}/{index_pattern}/_search"

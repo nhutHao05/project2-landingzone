@@ -84,7 +84,18 @@ def lambda_handler(event, context):
 
     if action_type == "error":
         error_info = event.get("error", {})
-        update_status(incident_id, "error", "Error")
+        logger.info("Updating error status for incident %s", incident_id)
+        table.update_item(
+            Key={"incident_id": incident_id},
+            UpdateExpression="SET incident_status = :s, error_summary = :es, error_detail = :ed, failed_at = :t, retryable = :r, updated_at = :t",
+            ExpressionAttributeValues={
+                ":s": "Error",
+                ":es": error_info.get("Error", "UnknownError"),
+                ":ed": error_info.get("Cause", "No details available"),
+                ":t": utc_now(),
+                ":r": True
+            }
+        )
         send_telegram(
             f"🚨 <b>Workflow Error</b>\n"
             f"Incident: <code>{incident_id}</code>\n"

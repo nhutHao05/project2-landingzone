@@ -10,6 +10,7 @@ Hỗ trợ phân tích 4 loại log từ Landing Zone:
 SYSTEM_PROMPT = """
 Bạn là một chuyên gia phân tích bảo mật đám mây (Cloud Security Analyst) với kinh nghiệm sâu về:
 - AWS Landing Zone (Organizations, IAM, CloudTrail, VPC, S3, RDS)
+- Vulnerability Management (Amazon Inspector, CVE, Software Patching)
 - MITRE ATT&CK framework (cloud tactics: TA0001–TA0010)
 - OWASP Top 10 (web application vulnerabilities)
 - Incident Response & Root Cause Analysis (5-Why methodology)
@@ -45,6 +46,8 @@ def build_analysis_prompt(alert: dict, context_logs: list[dict]) -> str:
             log_sources_present.add("Web App / ALB Log")
         elif "mysql" in ds or "rds" in ds or "postgresql" in ds:
             log_sources_present.add("Database / RDS Log")
+        elif "inspector" in ds.lower() or "vulnerability" in ds.lower():
+            log_sources_present.add("Amazon Inspector Findings")
         else:
             log_sources_present.add("System / Other Log")
 
@@ -92,6 +95,15 @@ def build_analysis_prompt(alert: dict, context_logs: list[dict]) -> str:
             entry["db_user"] = log.get("mysql", {}).get("thread_id", "")
             entry["query_time"] = log.get("mysql", {}).get("slowlog", {}).get("query_time", {}).get("sec", "")
 
+        # Inspector / Vulnerability Log-specific fields
+        elif "inspector" in log.get("data_stream", {}).get("dataset", "").lower():
+            entry["cve_id"] = log.get("vulnerability", {}).get("id", "")
+            entry["severity"] = log.get("vulnerability", {}).get("severity", "")
+            entry["affected_ec2"] = log.get("aws", {}).get("inspector", {}).get("resource", {}).get("id", "")
+            entry["package"] = log.get("vulnerability", {}).get("package", {}).get("name", "")
+            entry["version"] = log.get("vulnerability", {}).get("package", {}).get("version", "")
+            entry["remediation"] = log.get("aws", {}).get("inspector", {}).get("finding", {}).get("remediation", {}).get("recommendation", {}).get("text", "")
+
         formatted_logs.append(entry)
 
     # ---------- Build prompt ----------
@@ -122,6 +134,7 @@ Các mối đe dọa phổ biến cần chú ý:
 2. **VPC Flow Logs**: Port scanning, lateral movement, data exfiltration, unusual outbound connections, brute force attempts
 3. **Web App Logs (OpsDesk)**: SQL injection, XSS, path traversal, brute force login, unauthorized access to admin endpoints
 4. **Database Logs (RDS MySQL)**: Unusual queries, bulk data extraction, failed authentication, privilege abuse, slow query attacks
+5. **Amazon Inspector**: Phân tích các lỗ hổng phần mềm (CVE) trên EC2. Nếu lỗi mức độ CRITICAL/HIGH và target là EC2 instance, BẮT BUỘC dùng action "isolate_ec2" (auto_execute: false), target là instance id, đưa ra command: `aws ec2 modify-instance-attribute --instance-id <ID> --groups <ISOLATION_SG_ID>` (thay thế nhóm bảo mật hiện tại bằng một SG cô lập hoàn toàn).
 
 ## OUTPUT FORMAT BẮT BUỘC
 
