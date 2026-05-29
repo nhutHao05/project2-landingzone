@@ -100,14 +100,16 @@ Mở browser: `http://<ALB-DNS-NAME>/` *(Đường link ALB này sẽ được i
 - **Admin**: `admin` / `123@`
 - **Ops Staff**: `ops01` / `123@`
 
-### Layer 2 - SOAR Web Portal (Private - Trạm điều khiển AI)
-Vì Web Portal nằm trong Private Subnet (chỉ có IP nội bộ), bạn phải dùng SSM Port Forwarding để chui ống vào:
-```bash
-cd scripts/
-chmod +x access_app.sh
-./access_app.sh
+### Layer 2 - SOAR Web Portal (Private - Trạm điều khiển AI với Cognito SSO)
+Vì Web Portal nằm trong Private Subnet (chỉ có IP nội bộ), bạn sử dụng PowerShell script để kết nối hầm SSM (SSM tunnel) chuyển tiếp cổng 80 của EC2 sang cổng 8080 local:
+```powershell
+cd environments/monitor-account/scripts
+./start_ssm_tunnel.ps1
 ```
-Trình duyệt sẽ tự động kết nối qua `http://localhost:8501`.
+Mở trình duyệt truy cập: `http://localhost:8080/index.html`.
+- **Cognito SSO Login**: Click nút **Sign in with Cognito** để đăng nhập bằng thông tin:
+  - **Email**: `admin@soar.local`
+  - **Password**: `Admin@123!`
 
 ---
 **🎉 Chúc bạn Deploy thành công rực rỡ! 🚀**

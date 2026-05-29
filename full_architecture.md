@@ -70,7 +70,8 @@ Multi-Account AWS  →  Đẩy Logs vào Elastic (anh Hưng)  →  AI phân tíc
 ⑥ Step Functions State Machine (p2-soar-remediation-workflow)
    │
    ├─ ClassifySeverity
-   │       └─ auto_execute=False (hiện tại) → WaitForApproval
+   │       ├─ auto_execute=true (Severity dưới High: medium, low) ──► ExecuteRemediation
+   │       └─ auto_execute=false (Severity từ High trở lên: high, critical) ──► WaitForApproval
    │
    └─ WaitForApproval ⏳
         Lưu TaskToken vào DynamoDB
@@ -91,7 +92,7 @@ Multi-Account AWS  →  Đẩy Logs vào Elastic (anh Hưng)  →  AI phân tíc
         Step Functions resume:
          ├─ Approved → ExecuteApprovedAction Lambda
          │     └─ Assume Role vào DevOps Account
-         │          ├─ block_ip    → WAFv2 IP Set
+         │          ├─ block_ip    → Network ACL (NACL)
          │          ├─ isolate_ec2 → Isolation Security Group
          │          └─ revoke_creds → Disable IAM Access Key
          │

@@ -263,8 +263,8 @@ Elastic SIEM Alert (Webhook)
 [Step Functions State Machine: p2-soar-remediation-workflow]
         │
    ① ClassifySeverity
-        ├── auto_execute: true (risk=low)  ──► ② ExecuteRemediation (Lambda)
-        └── auto_execute: false            ──► ③ WaitForApproval (TaskToken, 24h timeout)
+        ├── auto_execute: true (Severity < High: medium, low)  ──► ② ExecuteRemediation (Lambda)
+        └── auto_execute: false (Severity >= High: high, critical) ──► ③ WaitForApproval (TaskToken, 24h timeout)
                                                        │
                                           [Web Portal + Cognito SSO]
                                           Analyst click Approve/Reject
