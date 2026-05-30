@@ -179,7 +179,7 @@ flowchart TD
 - Bảng incidents với nút Approve/Reject
 
 > [!NOTE]
-> Phase 4 & 5 đã được deploy hoàn chỉnh — giữ nguyên, không thay đổi.
+> Phase 4, 5 & 6 đã được deploy hoàn chỉnh — bao gồm Step Functions, Cognito SSO, Inspector integration, và Retry/Error handling.
 
 ---
 
@@ -195,8 +195,9 @@ flowchart TD
 | IAM cho Elastic Agent EC2 | ✅ Đầy đủ | S3 + SQS + AssumeRole permissions |
 | Elastic Agent health | ✅ Healthy | Đã sửa SCP chặn vùng + nâng cấp lên `t3.small` (2 GB RAM) |
 | SIEM Detection Rules | ✅ 5 rules active | Webhook → AI Engine |
-| AI Engine (Lambda) | ✅ Hoạt động | Đã tích hợp Telegram Security Alerts (gửi tin nhắn thời gian thực qua bot API), bổ sung quyền IAM Marketplace, sửa SCP vùng, và cơ chế fallback tự động cục bộ khi Bedrock quá tải. |
-| Remediation + Web Portal | ✅ Deployed | Approve/Reject flow |
+| AI Engine (Lambda) | ✅ Hoạt động | Claude Haiku 4.5, Telegram Alerts, Local Fallback Engine. Auto-remediation cho severity dưới High. |
+| Remediation + Web Portal | ✅ Deployed | Step Functions + Cognito SSO + Approve/Reject/Retry flow |
+| Amazon Inspector | ✅ Deployed | EC2 scanning → EventBridge → SQS → AI Engine (DevOps → Monitor) |
 
 ---
 
@@ -296,8 +297,8 @@ Elastic SIEM Alert (Webhook)
 
 | Trạng thái | Loại | Mô tả |
 |---|---|---|
-| ClassifySeverity | Choice | Check `auto_execute` flag |
-| ExecuteRemediation | Task (Lambda) | Auto-execute low-risk actions |
+| ClassifySeverity | Choice | Check `auto_execute` flag (dựa theo severity) |
+| ExecuteRemediation | Task (Lambda) | Auto-execute khi severity dưới High (medium, low) |
 | WaitForApproval | Task (waitForTaskToken) | Pause chờ analyst approve, timeout 24h |
 | ApprovalRouter | Choice | Route dựa theo quyết định analyst |
 | ExecuteApprovedAction | Task (Lambda) | Thực thi sau khi được approve |
@@ -319,7 +320,8 @@ Elastic SIEM Alert (Webhook)
 |---|---|---|---|
 | POST | `/remediate` | Cognito JWT | `remediation` (legacy) |
 | GET  | `/incidents` | Cognito JWT | `remediation` |
-| POST | `/callback`  | Cognito JWT | `remediation-callback` **[NEW]** |
+| POST | `/callback`  | Cognito JWT | `remediation-callback` |
+| POST | `/retry`     | Cognito JWT | `remediation` **[NEW — Phase 6]** |
 | OPTIONS | tất cả | NONE | CORS preflight |
 
 ### F. Web Portal Upgrade

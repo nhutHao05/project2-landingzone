@@ -209,7 +209,7 @@ Monitor Account                        DevOps Account
 │  ✅ Tạo S3 Bucket centralized logs (Monitor Account)             │
 │  ✅ Tạo SQS Queue + S3 Event Notification                       │
 │  ✅ Deploy EC2 Elastic Agent (Monitor Account)                   │
-│  ✅ Web App OpsDesk (Next.js) + ALB + RDS MySQL (DevOps)         │
+│  ✅ Web App OpsDesk (PHP) + ALB + RDS MySQL (DevOps)             │
 │  ✅ CloudTrail + VPC FlowLogs + ALB Logs (DevOps Account)        │
 │  ✅ AI Engine Lambda (Bedrock Claude + fallback heuristic)       │
 │  ✅ Telegram Security Alerts                                     │
@@ -217,6 +217,8 @@ Monitor Account                        DevOps Account
 │  ✅ Web Portal EC2 (nginx, static HTML)                         │
 │  ✅ Cognito SSO (PKCE, Hosted UI, User Pool)                    │
 │  ✅ Cross-account Remediation (AssumeRole DevOps Account)        │
+│  ✅ Amazon Inspector EC2 Scanning + EventBridge → SQS → AI      │
+│  ✅ Retry / Error Handling (Web Portal + Step Functions)         │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 
@@ -251,39 +253,57 @@ AWS Organizations (Master Account)
 │
 ├── DevOps Account
 │     Terraform state (S3 + DynamoDB)
-│     CI/CD pipelines
 │
-│     🌐 Web App "OpsDesk" (Incident Management):
+│     🌐 Web App "OpsDesk" (Layer 1 — PHP App):
 │       ├── ALB (public, HTTP:80) → nhận request từ internet
-│       ├── Layer 1: EC2 Web Tier (t3.micro x2, private subnet, port 8080)
-│       │     PHP App — tạo/xem/quản lý incidents
-│       ├── Layer 2: EC2 App Tier (t3.micro x2, private subnet)
-│       │     Log Analysis Logic
-│       └── Layer 3: RDS MySQL 8.0 (db.t3.micro, isolated subnet)
+│       ├── EC2 Web Tier (t3.micro x2, private subnet, port 8080)
+│       │     PHP App — tạo/xem/quản lý incidents (OpsDesk)
+│       └── RDS MySQL 8.0 (db.t3.micro, isolated subnet)
 │             Database lưu incidents, không public, không egress
+│
+│     🔍 Amazon Inspector (EC2 Scanning):
+│       └── EventBridge Rule → Forward Critical/High findings
+│             sang SQS Queue ở Monitor Account
 │
 │     Logging:
 │       ├── CloudTrail → S3 (ghi API calls)
-│       └── VPC FlowLogs → S3 (Monitor Account)
+│       ├── VPC FlowLogs → S3 (Monitor Account)
+│       └── ALB Access Logs → S3 (Monitor Account)
 │
 │     ⚠️  Detection KHÔNG dùng CloudWatch Alarms
 │         → Tất cả rules detect đều set bên Elastic SIEM
 │
 └── Monitor Account
       S3 Bucket:
-        └── s3://project2-soar-centralized-logs-{id}/
+        └── s3://p2-soar-centralized-logs-247448832458/
               ├── AWSLogs/{org-id}/...   ← CloudTrail logs từ mọi account
-              └── vpc-flowlogs/...       ← VPC Flow Logs từ DevOps
-      SQS Queue:
-        └── project2-soar-cloudtrail-notifications
-              ← Nhận S3 event khi có file .json.gz mới
+              ├── vpc-flowlogs/...       ← VPC Flow Logs từ DevOps
+              └── alb-logs/...           ← ALB Access Logs từ DevOps
+      SQS Queues:
+        ├── p2-soar-cloudtrail-notifications
+        │     ← Nhận S3 event khi có file .json.gz mới
+        └── p2-soar-inspector-findings
+              ← Nhận Inspector findings từ DevOps EventBridge
       IAM User:
-        └── project2-soar-elastic-agent
+        └── p2-soar-elastic-agent
               ← Access Key để Elastic Agent đọc S3 + poll SQS
-      EC2 Instance:
-        └── project2-soar-elastic-agent (t3.micro)
-              ← Chạy Elastic Agent, enroll vào Fleet anh Hưng
-              ← Không public IP, quản lý qua SSM
+      EC2 Instances:
+        ├── p2-soar-elastic-agent (t3.small)
+        │     ← Chạy Elastic Agent, enroll vào Fleet anh Hưng
+        │     ← Không public IP, quản lý qua SSM
+        └── p2-soar-web-portal (nginx, static HTML/JS)
+              ← Nâng cấp từ Layer 2 App cũ (Streamlit AI Analyzer)
+              ← SOAR Dashboard + Cognito SSO + Approve/Reject/Retry
+              ← Truy cập qua SSM tunnel (port 80 → localhost:8080)
+      Lambda Functions:
+        ├── p2-soar-ai-engine (Bedrock Claude Haiku 4.5)
+        ├── p2-soar-remediation (incidents API + retry)
+        ├── p2-soar-remediation-executor (block IP, isolate EC2, revoke creds)
+        └── p2-soar-remediation-callback (Approve/Reject → Step Functions)
+      Step Functions: p2-soar-remediation-workflow
+      DynamoDB: p2-soar-incidents
+      API Gateway: p2-soar-remediation-api (Cognito-protected)
+      Cognito: p2-soar-portal-users (PKCE, Hosted UI)
 ```
 
 ---
@@ -320,138 +340,127 @@ Alert Actions:
 
 ---
 
-### AI Engine (sắp làm)
+### AI Engine ✅ Đã triển khai
 
 ```
-Trigger: Elastic Alert (Critical / High) → Webhook
+Trigger: Elastic SIEM Alert → Webhook POST → Lambda Function URL
     │
     ▼
-Lambda: "collect_context"
-    ├── Query Elasticsearch: 100 events xung quanh incident
-    ├── Query CloudTrail S3: lịch sử IP đó 7 ngày qua
-    ├── Query GuardDuty findings: account liên quan
-    └── Build structured context (tối ưu token)
+Lambda: "p2-soar-ai-engine" (Python 3.12)
+    ├── Parse alert payload từ Kibana webhook
+    ├── Query Elasticsearch: 15 events ±30 phút quanh alert
+    │   (CloudTrail, VPC Flow, Web App, Database, Inspector logs)
+    └── Build structured context (prompt_template.py)
     │
     ▼
-AWS Bedrock (Claude model)
-    Prompt:
-    "Đây là incident, đây là context 7 ngày.
-     Hãy phân tích:
-     1. Timeline tấn công
-     2. Root Cause (5 Why)
-     3. MITRE ATT&CK tactics/techniques
-     4. Control gaps
-     5. Remediation steps (kèm AWS API actions cụ thể)
-     6. Severity score + Confidence"
+AWS Bedrock (Claude Haiku 4.5 — anthropic.claude-haiku-4-5)
+    Prompt bao gồm:
+    - Thông tin alert từ Elastic SIEM
+    - Log context 15 events (multi-source: CloudTrail/VPC/Web/DB/Inspector)
+    - Yêu cầu phân tích: Timeline, Root Cause 5-Why, MITRE ATT&CK,
+      Remediation actions (kèm AWS CLI cụ thể), Severity + Confidence
+    - Output format: JSON schema bắt buộc
     │
     ▼
-AI Response:
-    {
-      "incident_story": "...",
-      "root_cause": {...},
-      "mitre_attack": ["T1078", "T1136"],
-      "remediation_actions": [
-        {
-          "action": "revoke_credentials",
-          "target": "iam-user-xyz",
-          "aws_api": "iam:delete-access-key",
-          "risk": "low",
-          "auto_execute": false   ← cần human approve
-        },
-        {
-          "action": "block_ip",
-          "target": "1.2.3.4",
-          "aws_api": "ec2:authorize-security-group-ingress",
-          "risk": "low",
-          "auto_execute": true    ← tự động thực thi luôn
-        }
-      ],
-      "severity": "critical",
-      "confidence": 0.92
-    }
-    │
-    ├── Lưu vào DynamoDB (incident store)
-    ├── Gửi về Web Portal (hiển thị)
-    └── Trigger Remediation Lambda (nếu auto_execute: true)
+    ├── Lưu vào DynamoDB (p2-soar-incidents, TTL 90 ngày)
+    ├── Gửi Telegram Security Alert (HTML formatted)
+    └── Trigger Step Functions cho TỪNG remediation action
+        ├── Severity < High (medium, low) → auto_execute = true
+        └── Severity >= High (high, critical) → auto_execute = false → chờ approve
+
+Fallback: Nếu Bedrock lỗi/throttled → Local Heuristic Engine tự phân tích
 ```
 
 ---
 
-### Web Portal — SSO (sắp làm)
+### Web Portal — Cognito SSO ✅ Đã triển khai
 
 ```
 Tech stack:
-  Frontend: React / Next.js
-  Backend: FastAPI (Python) hoặc Node.js
-  Auth: AWS IAM Identity Center (SSO) → SAML/OIDC
-  Deploy: ECS Fargate hoặc Lambda + API Gateway
-  DB: DynamoDB (incidents) + Elasticsearch (logs)
+  Frontend: Static HTML + Vanilla JS + CSS
+  Backend: API Gateway (REST) + Lambda (Python 3.12)
+  Auth: AWS Cognito User Pool (PKCE Authorization Code Flow)
+  Deploy: EC2 (nginx) trên Monitor Account, truy cập qua SSM tunnel
+  DB: DynamoDB (incidents)
 
 Tính năng:
   ┌─────────────────────────────────────────────────────┐
-  │  🔐 Login via SSO (AWS IAM Identity Center)         │
-  │       → Không cần tài khoản riêng                   │
-  │       → Tự động map role (Admin / Analyst / ReadOnly)│
+  │  🔐 Login via Cognito Hosted UI (PKCE)              │
+  │       → Redirect callback.html → exchange JWT       │
+  │       → Groups: Admin / Analyst / ReadOnly          │
   └─────────────────────────────────────────────────────┘
 
   Dashboard:
-  ├── Security Overview (incidents hôm nay / tuần)
-  ├── Incident List (filter by severity, account, status)
-  ├── Incident Detail:
-  │     - AI Analysis (timeline, RCA, MITRE)
-  │     - Raw logs liên quan (query từ Elasticsearch)
-  │     - Remediation Actions (danh sách các bước)
-  │         ├── [✅ Auto-executed] Block IP 1.2.3.4
-  │         ├── [⏳ Pending Approval] Revoke user xyz
-  │         │       [Approve] [Reject] [Modify]
-  │         └── [📋 Manual] Review S3 bucket policy
-  ├── Remediation History (audit trail)
-  └── Settings (thresholds, auto-execute rules)
+  ├── 4 Metric Cards (Total / Critical / Pending / Resolved)
+  ├── Incident List (sort by timestamp, severity badge)
+  │     Mỗi incident hiển thị:
+  │       - Severity badge (critical/high/medium/low)
+  │       - Status badge (Pending Approval / Resolved / Rejected / Error)
+  │       - Nút [Approve] [Reject] (khi Pending Approval)
+  │       - Nút [Retry] (khi Error + retryable=true)
+  └── Audit info: decided_by, decided_at, retry_count
 ```
 
 ---
 
-### Automated Remediation (sắp làm)
+### Automated Remediation ✅ Đã triển khai
 
 ```
-Remediation Lambda nhận action từ AI:
-
-Action: "revoke_credentials"
-  → iam.delete_access_key(UserName='xyz', AccessKeyId='AKIA...')
-  → iam.deactivate_mfa_device(...)
-  → Log action vào DynamoDB
+Remediation Executor Lambda (p2-soar-remediation-executor)
+Gọi bởi Step Functions, AssumeRole cross-account vào DevOps Account.
 
 Action: "block_ip"
-  → ec2.authorize_security_group_egress(
-        GroupId='sg-xxx',
-        IpPermissions=[{
-            'IpProtocol': '-1',
-            'IpRanges': [{'CidrIp': '1.2.3.4/32'}]
-        }]
+  → Tìm VPC DevOps (tag ManagedBy=Terraform hoặc VPC đầu tiên)
+  → Lấy Network ACL (NACL) của VPC
+  → Tìm rule number trống (10-99)
+  → ec2.create_network_acl_entry(
+        NetworkAclId='acl-xxx',
+        RuleNumber=<available>,
+        Protocol='-1', RuleAction='deny',
+        CidrBlock='1.2.3.4/32'
     )
 
 Action: "isolate_ec2"
+  → Tìm hoặc tạo "Isolation-SG" (deny all inbound + outbound)
   → ec2.modify_instance_attribute(
         InstanceId='i-xxx',
-        Groups=['sg-isolated']  ← SG chặn tất cả traffic
+        Groups=['sg-isolation']  ← SG chặn tất cả traffic
     )
 
-Action: "disable_iam_user"
-  → iam.update_login_profile(UserName='xyz', PasswordResetRequired=True)
-  → iam.list_access_keys → delete all
+Action: "revoke_creds"
+  → iam.list_access_keys(UserName='xyz')
+  → iam.update_access_key(Status='Inactive') cho mỗi key Active
+
+Đặc biệt: reject, timeout, error
+  → Cập nhật DynamoDB status tương ứng
+  → Gửi Telegram thông báo
 
 Audit trail:
-  Mọi action đều được log:
-  {
-    "timestamp": "2024-05-17T02:00:00Z",
-    "incident_id": "INC-001",
-    "action": "block_ip",
-    "target": "1.2.3.4",
-    "executed_by": "AI_AUTO",  hoặc  "user@company.com"
-    "approved_by": "admin@company.com",
-    "result": "success",
-    "rollback_command": "aws ec2 revoke-security-group-egress ..."
-  }
+  Mọi action đều được log vào DynamoDB:
+  - incident_status: Resolved / Rejected / Timed Out / Error
+  - decided_by: email analyst (từ Cognito JWT)
+  - decided_at: ISO timestamp
+  - retry_count: số lần retry (nếu có)
+  - error_summary + error_detail (nếu Error)
+```
+
+---
+
+### Amazon Inspector Integration ✅ Đã triển khai
+
+```
+DevOps Account:
+  aws_inspector2_enabler (EC2 scanning)
+  → Inspector quét lỗ hổng CVE tự động trên tất cả EC2 instances
+  → EventBridge Rule: filter severity CRITICAL/HIGH + status ACTIVE
+  → Forward findings sang SQS Queue ở Monitor Account
+
+Monitor Account:
+  SQS Queue: p2-soar-inspector-findings
+  → AI Engine Lambda nhận và phân tích lỗ hổng
+  → Bedrock đánh giá ảnh hưởng tới tài sản EC2
+  → Đề xuất action: isolate_ec2 (cô lập máy bị nhiễm)
+  → Step Functions workflow quyết định auto/manual
 ```
 
 ---
@@ -516,10 +525,10 @@ Audit trail:
 |-------|----------|------------|
 | **Phase 1** | Landing Zone: Organizations + 3 accounts + CloudTrail centralized + S3 + SQS + IAM | ✅ Xong |
 | **Phase 2** | Elastic Agent: EC2 → enroll Fleet anh Hưng → cấu hình AWS Integration → verify logs vào Elasticsearch | ✅ Xong |
-| **Phase 3** | AI Engine: Lambda + Bedrock. Test với real alerts từ Elastic | ✅ Xong |
-| **Phase 4** | Remediation: Lambda actions (block IP, revoke creds, isolate EC2) | ✅ Xong |
-| **Phase 5** | Web Portal: SSO login + Dashboard + Approve/Reject UI | ✅ Xong |
-| **Phase 6** | Polish: Audit logs, rollback, thresholds, testing attack scenarios | 🔄 Đang làm |
+| **Phase 3** | AI Engine: Lambda + Bedrock (Claude Haiku 4.5) + Telegram Alerts + Local Fallback | ✅ Xong |
+| **Phase 4** | Remediation: Step Functions + Executor Lambda (block IP via NACL, isolate EC2, revoke creds) | ✅ Xong |
+| **Phase 5** | Web Portal: Cognito SSO (PKCE) + Dashboard + Approve/Reject/Retry UI | ✅ Xong |
+| **Phase 6** | Inspector Integration + Retry/Error Handling + Auto-remediation dưới High + NACL dynamic blocking | ✅ Xong |
 
 > [!IMPORTANT]
 > **Điểm khác biệt so với chỉ dùng Elastic SIEM thuần:**
