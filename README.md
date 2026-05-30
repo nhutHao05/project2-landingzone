@@ -14,10 +14,7 @@ Dự án này chứa nhiều tài liệu chi tiết. Vui lòng tham khảo các 
 2. **[Hướng dẫn triển khai (Deployment Guide)](DEPLOYMENT_COMPLETE_GUIDE.md)**
    👉 Hướng dẫn từng bước (step-by-step) cách sử dụng script tự động để deploy toàn bộ hạ tầng bằng Terraform và Ansible.
 
-3. **[Quá trình cập nhật (Walkthrough)](walkthrough.md)**
-   👉 Nhật ký các tính năng đã được bổ sung và dọn dẹp trong suốt quá trình phát triển (bao gồm Phase 6).
-
-4. **[Tổng hợp dự án (Project Summary)](PROJECT_SUMMARY.md)**
+3. **[Tổng hợp dự án (Project Summary)](PROJECT_SUMMARY.md)**
    👉 Tóm tắt kiến trúc 2-tier workload ở DevOps và trung tâm giám sát SOAR ở Monitor.
 
 ---
