@@ -328,11 +328,11 @@ Elastic SIEM Alert (Webhook)
 
 | File | Thay đổi |
 |---|---|
-| `index.html` | Xóa mock login form → Cognito SSO button + 4 metric cards |
-| `app.js` | PKCE auth flow, JWT API calls, SF callback, reject button |
-| `callback.html` | **[NEW]** Cognito redirect handler, PKCE token exchange |
-| `styles.css` | SSO button, loading spinner, 4-column metrics |
-| `config.json` | **Auto-generated** — thêm Cognito domain, client_id, callback/logout URLs |
+| `index.html` | Xóa mock login form ➔ Nút Cognito SSO, 4 metric cards, bổ sung cột **Audit** (hiển thị email & thời gian hành động) và cột **Approval** (nút Approve/Reject/Retry). |
+| `app.js` | Hỗ trợ PKCE auth flow, JWT API calls. Xử lý logic hiển thị thông tin Audit (`decidedBy`, `decidedAt`, `retriedBy`). Thêm nút **Retry** gọi `/retry` khi action bị lỗi (`status == 'error'`). Parse và hiển thị Tooltip thông tin lỗi khi hover vào icon cảnh báo. |
+| `callback.html` | **[NEW]** Cognito redirect handler, PKCE token exchange để lấy JWT tokens an toàn. |
+| `styles.css` | Giao diện Glassmorphism mới, SSO button, loading spinner, 4-column metrics. Bổ sung style cho nút **Retry**, **Error badge** và hover **Tooltip** để xem nhanh error details (Catch info). |
+| `config.json` | **Auto-generated** — thêm Cognito domain, client_id, callback/logout URLs. |
 
 ---
 
